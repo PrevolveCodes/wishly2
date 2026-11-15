@@ -29,6 +29,26 @@ service cloud.firestore {
         && getAfter(/databases/$(database)/documents/lists/$(listId)).data.shareId == shareId;
     }
 
+    function indexExists(shareId) {
+      return exists(/databases/$(database)/documents/publicWishlistIndex/$(shareId));
+    }
+
+    function indexedListId(shareId) {
+      return get(/databases/$(database)/documents/publicWishlistIndex/$(shareId)).data.listId;
+    }
+
+    function isPublicShare(shareId) {
+      return indexExists(shareId) && isPublicList(indexedListId(shareId), shareId);
+    }
+
+    function isPublicShareAfter(shareId) {
+      return existsAfter(/databases/$(database)/documents/publicWishlistIndex/$(shareId))
+        && isPublicListAfter(
+          getAfter(/databases/$(database)/documents/publicWishlistIndex/$(shareId)).data.listId,
+          shareId
+        );
+    }
+
     match /users/{uid} {
       allow read, create, update, delete: if signedIn() && request.auth.uid == uid;
     }
@@ -61,29 +81,45 @@ service cloud.firestore {
       }
     }
 
-    // This collection contains only display-safe wishlist fields.
-    // It never contains owner UIDs, password hashes, password-holder names,
-    // reservation records, or reservation access grants.
-    match /publicWishlists/{shareId} {
-      allow read: if isPublicList(resource.data.listId, shareId);
+    // Hidden lookup mapping: clients cannot read this collection.
+    match /publicWishlistIndex/{shareId} {
+      allow read: if false;
 
       allow create: if signedIn()
-        && request.resource.data.keys().hasOnly([
-          'listId','title','description','occasion','eventDate','passwordProtectionActive'
-        ])
-        && request.resource.data.keys().hasAll([
-          'listId','title','description','occasion','eventDate','passwordProtectionActive'
-        ])
+        && request.resource.data.keys().hasOnly(['listId'])
+        && request.resource.data.keys().hasAll(['listId'])
         && ownsListAfter(request.resource.data.listId)
         && isPublicListAfter(request.resource.data.listId, shareId);
 
+      allow update: if signedIn()
+        && ownsList(resource.data.listId)
+        && request.resource.data.listId == resource.data.listId
+        && request.resource.data.keys().hasOnly(['listId']);
+
+      allow delete: if ownsList(resource.data.listId);
+    }
+
+    // Public mirror contains display fields only; no owner IDs or reservation details.
+    match /publicWishlists/{shareId} {
+      allow read: if isPublicShare(shareId);
+
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'title','description','occasion','eventDate','passwordProtectionActive'
+        ])
+        && request.resource.data.keys().hasAll([
+          'title','description','occasion','eventDate','passwordProtectionActive'
+        ])
+        && existsAfter(/databases/$(database)/documents/publicWishlistIndex/$(shareId))
+        && ownsListAfter(getAfter(/databases/$(database)/documents/publicWishlistIndex/$(shareId)).data.listId)
+        && isPublicShareAfter(shareId);
+
       allow update: if (
         signedIn()
-        && ownsList(resource.data.listId)
-        && isPublicList(resource.data.listId, shareId)
-        && request.resource.data.listId == resource.data.listId
+        && isPublicShare(shareId)
+        && ownsList(indexedListId(shareId))
         && request.resource.data.keys().hasOnly([
-          'listId','title','description','occasion','eventDate','passwordProtectionActive'
+          'title','description','occasion','eventDate','passwordProtectionActive'
         ])
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'title','description','occasion','eventDate','passwordProtectionActive'
@@ -97,35 +133,30 @@ service cloud.firestore {
         )
       ) || (
         signedIn()
-        && isPublicList(resource.data.listId, shareId)
-        && request.resource.data.listId == resource.data.listId
+        && isPublicShare(shareId)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['passwordProtectionActive'])
         && request.resource.data.passwordProtectionActive == true
         && exists(/databases/$(database)/documents/reservationSecrets/$(shareId))
       );
 
-      // The owner can remove a public mirror after switching a list to private.
-      allow delete: if ownsList(resource.data.listId);
+      // Owners can remove a mirror when changing a list to private.
+      allow delete: if indexExists(shareId) && ownsList(indexedListId(shareId));
 
       match /items/{itemId} {
-        function parentListId() {
-          return get(/databases/$(database)/documents/publicWishlists/$(shareId)).data.listId;
-        }
-
-        allow read: if isPublicList(parentListId(), shareId);
+        allow read: if isPublicShare(shareId);
 
         allow create, update: if signedIn()
-          && ownsList(parentListId())
-          && isPublicList(parentListId(), shareId)
+          && isPublicShare(shareId)
+          && ownsList(indexedListId(shareId))
           && request.resource.data.keys().hasOnly([
             'name','description','imageUrl','purchaseUrl','price'
           ]);
 
-        allow delete: if ownsList(parentListId());
+        allow delete: if indexExists(shareId) && ownsList(indexedListId(shareId));
       }
     }
 
-    // Reservation secrets and reservation records are server-only.
+    // Reservation secrets, access grants, and reservation records are server-only.
     match /reservationSecrets/{shareId} {
       allow read, write: if false;
     }
