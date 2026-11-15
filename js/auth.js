@@ -1,0 +1,12 @@
+import {auth,db} from "./firebase.js";
+import {createUserWithEmailAndPassword,signInWithEmailAndPassword,GoogleAuthProvider,signInWithPopup,sendPasswordResetEmail,onAuthStateChanged,updateProfile} from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
+import {doc,setDoc,serverTimestamp} from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
+const $=id=>document.getElementById(id),msg=$("message");
+const say=(s,ok=false)=>{msg.textContent=s;msg.className="form-message"+(ok?" success":"")};
+onAuthStateChanged(auth,user=>{if(user)location.replace("dashboard.html")});
+async function profile(user,name){await setDoc(doc(db,"users",user.uid),{uid:user.uid,displayName:name||user.displayName||user.email.split("@")[0],email:user.email,createdAt:serverTimestamp(),updatedAt:serverTimestamp()},{merge:true})}
+$("signup-form")?.addEventListener("submit",async e=>{e.preventDefault();say("");const name=$("displayName").value.trim(),email=$("email").value.trim(),pass=$("password").value;if(pass!==$("confirmPassword").value)return say("Your passwords do not match.");if(pass.length<8)return say("Use at least 8 characters for your password.");try{const cred=await createUserWithEmailAndPassword(auth,email,pass);await updateProfile(cred.user,{displayName:name});await profile(cred.user,name);location.href="dashboard.html"}catch(err){say(friendly(err))}});
+$("login-form")?.addEventListener("submit",async e=>{e.preventDefault();say("");try{await signInWithEmailAndPassword(auth,$("email").value.trim(),$("password").value);location.href="dashboard.html"}catch(err){say(friendly(err))}});
+$("google")?.addEventListener("click",async()=>{say("");try{const cred=await signInWithPopup(auth,new GoogleAuthProvider());await profile(cred.user);location.href="dashboard.html"}catch(err){say(friendly(err))}});
+$("forgot")?.addEventListener("click",async()=>{const email=$("email").value.trim();if(!email)return say("Enter your email address first.");try{await sendPasswordResetEmail(auth,email);say("Password reset email sent. Check your inbox.",true)}catch(err){say(friendly(err))}});
+function friendly(e){const m={"auth/invalid-credential":"Email or password is incorrect.","auth/email-already-in-use":"An account already uses this email.","auth/weak-password":"Choose a stronger password.","auth/popup-closed-by-user":"The Google sign-in window was closed.","auth/unauthorized-domain":"Add this website's domain to Firebase Authentication → Settings → Authorized domains."};return m[e.code]||e.message||"Something went wrong. Please try again."}
