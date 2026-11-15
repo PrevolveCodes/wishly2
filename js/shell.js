@@ -1,0 +1,1 @@
+import {auth} from "./firebase.js";import {onAuthStateChanged,signOut} from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";onAuthStateChanged(auth,u=>{if(!u)location.replace("login.html")});document.getElementById("logout")?.addEventListener("click",()=>signOut(auth).then(()=>location.href="index.html"));
