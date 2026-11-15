@@ -1,0 +1,23 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function ownsList() { return signedIn() && resource.data.ownerUid == request.auth.uid; }
+    match /users/{uid} {
+      allow read, create, update, delete: if signedIn() && request.auth.uid == uid;
+    }
+    match /lists/{listId} {
+      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.keys().hasAll(['title','ownerUid','shareId','visibility']);
+      allow read: if ownsList();
+      allow update, delete: if ownsList() && request.resource.data.ownerUid == resource.data.ownerUid
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['passwordHash','reservationStatuses','reservationCount','passwordHolderUid']);
+      match /items/{itemId} {
+        allow read, write: if signedIn() && get(/databases/$(database)/documents/lists/$(listId)).data.ownerUid == request.auth.uid;
+      }
+    }
+    match /reservationSecrets/{shareId} { allow read, write: if false; }
+    match /reservations/{shareId}/items/{itemId} { allow read, write: if false; }
+    match /{document=**} { allow read, write: if false; }
+  }
+}
