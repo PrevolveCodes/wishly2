@@ -2,7 +2,7 @@ import {auth,db} from "./firebase.js";
 import {onAuthStateChanged,signOut} from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
 import {
   collection,addDoc,query,where,getDocs,doc,getDoc,updateDoc,deleteDoc,writeBatch,
-  serverTimestamp,increment,onSnapshot
+  serverTimestamp,increment,onSnapshot,setDoc
 } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
 
 const $=id=>document.getElementById(id);
@@ -13,6 +13,16 @@ const safeUrl=value=>{
     return url.protocol==="https:"||url.protocol==="http:"?url.href:"";
   }catch{return ""}
 };
+const publicListData=(listId,data)=>({
+  listId,title:String(data.title||""),description:String(data.description||""),
+  occasion:String(data.occasion||""),eventDate:typeof data.eventDate==="string"?data.eventDate:null,
+  passwordProtectionActive:!!data.reservationProtectionActivated
+});
+const publicItemData=item=>({
+  name:String(item.name||""),description:String(item.description||""),
+  imageUrl:safeUrl(item.imageUrl),purchaseUrl:safeUrl(item.purchaseUrl),
+  price:typeof item.price==="number"&&Number.isFinite(item.price)?item.price:null
+});
 
 let user=null;
 onAuthStateChanged(auth,u=>{
@@ -30,13 +40,18 @@ $("create-list")?.addEventListener("submit",async event=>{
   button.disabled=true;
   message.textContent="Creating your list…";
   try{
-    const ref=await addDoc(collection(db,"lists"),{
+    const ref=doc(collection(db,"lists"));
+    const data={
       ownerUid:user.uid,title:$("title").value.trim(),description:$("description").value.trim(),
       occasion:$("occasion").value.trim(),eventDate:$("eventDate").value||null,
       visibility:$("visibility").value,
       shareId:crypto.randomUUID()+crypto.randomUUID().replaceAll("-",""),
       itemCount:0,createdAt:serverTimestamp(),updatedAt:serverTimestamp()
-    });
+    };
+    const batch=writeBatch(db);
+    batch.set(ref,data);
+    if(data.visibility==="public")batch.set(doc(db,"publicWishlists",data.shareId),publicListData(ref.id,data));
+    await batch.commit();
     location.href="list.html?id="+encodeURIComponent(ref.id);
   }catch(error){message.textContent=error.message||"Couldn't create your list.";button.disabled=false}
 });
@@ -53,6 +68,12 @@ async function loadAll(){
   }catch(error){$("message").textContent=error.message||"Couldn't load your lists."}
 }
 
+async function syncPublicItems(listData){
+  const ref=collection(db,"publicWishlists",listData.shareId,"items");
+  const snapshot=await getDocs(ref);
+  await Promise.all(snapshot.docs.map(item=>deleteDoc(item.ref)));
+}
+
 async function loadOne(){
   const id=new URLSearchParams(location.search).get("id");
   const root=$("list-detail");
@@ -63,6 +84,7 @@ async function loadOne(){
     if(!snapshot.exists()||snapshot.data().ownerUid!==user.uid){root.textContent="This list isn't available.";return}
     let listData=snapshot.data();
     const itemsRef=collection(listRef,"items");
+    const publicListRef=doc(db,"publicWishlists",listData.shareId);
     let itemRows=[];
     const editingItems=new Set();
     let stopItems=null;
@@ -135,6 +157,12 @@ async function loadOne(){
         button.disabled=true;message.textContent="Saving…";
         try{
           await updateDoc(listRef,{title:next.title,description:next.description,occasion:next.occasion,eventDate:next.eventDate,visibility:next.visibility,updatedAt:serverTimestamp()});
+          if(next.visibility==="public"){
+            await setDoc(publicListRef,publicListData(id,next),{merge:true});
+          }else{
+            await syncPublicItems(next);
+            await deleteDoc(publicListRef).catch(()=>{});
+          }
           message.textContent="Saved.";message.classList.add("success");
         }catch(error){
           listData=previous;
@@ -162,6 +190,7 @@ async function loadOne(){
           const batch=writeBatch(db);
           batch.set(newRef,item);
           batch.update(listRef,{itemCount:increment(1),updatedAt:serverTimestamp()});
+          if(listData.visibility==="public")batch.set(doc(db,"publicWishlists",listData.shareId,"items",newRef.id),publicItemData(item));
           await batch.commit();
           form.reset();message.textContent="Item added.";message.classList.add("success");
         }catch(error){message.textContent=error.message||"Couldn't add this item.";message.classList.remove("success")}
@@ -173,7 +202,9 @@ async function loadOne(){
         const button=$("delete-list");button.disabled=true;
         try{
           const current=await getDocs(itemsRef);
-          await Promise.all(current.docs.map(item=>deleteDoc(item.ref)));
+          const publicItems=await getDocs(collection(db,"publicWishlists",listData.shareId,"items"));
+          await Promise.all([...current.docs,...publicItems.docs].map(item=>deleteDoc(item.ref)));
+          await deleteDoc(publicListRef).catch(()=>{});
           await deleteDoc(listRef);
           location.href="my-lists.html";
         }catch(error){button.disabled=false;alert(error.message||"Couldn't delete this list.")}
@@ -197,7 +228,10 @@ async function loadOne(){
         const price=priceText.trim()===""?null:Number(priceText);
         if(price!==null&&(!Number.isFinite(price)||price<0)){alert("Enter a valid price.");return}
         const patch={name:name.trim(),description:description.trim(),imageUrl:cleanImage,purchaseUrl:cleanPurchase,price};
-        await updateDoc(doc(itemsRef,itemId),patch);
+        const batch=writeBatch(db);
+        batch.update(doc(itemsRef,itemId),patch);
+        if(listData.visibility==="public")batch.set(doc(db,"publicWishlists",listData.shareId,"items",itemId),publicItemData(patch));
+        await batch.commit();
       }catch(error){
         alert(error.message||"Couldn't update this item. Your previous item data has been restored.");
       }finally{
@@ -212,6 +246,7 @@ async function loadOne(){
         const batch=writeBatch(db);
         batch.delete(doc(itemsRef,itemId));
         batch.update(listRef,{itemCount:increment(-1),updatedAt:serverTimestamp()});
+        if(listData.visibility==="public")batch.delete(doc(db,"publicWishlists",listData.shareId,"items",itemId));
         await batch.commit();
       }catch(error){button.disabled=false;alert(error.message||"Couldn't remove this item.")}
     }
