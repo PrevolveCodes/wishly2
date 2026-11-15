@@ -1,27 +1,135 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function signedIn() { return request.auth != null; }
-    function ownsList() { return signedIn() && resource.data.ownerUid == request.auth.uid; }
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function ownsList(listId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/lists/$(listId))
+        && get(/databases/$(database)/documents/lists/$(listId)).data.ownerUid == request.auth.uid;
+    }
+
+    function ownsListAfter(listId) {
+      return signedIn()
+        && existsAfter(/databases/$(database)/documents/lists/$(listId))
+        && getAfter(/databases/$(database)/documents/lists/$(listId)).data.ownerUid == request.auth.uid;
+    }
+
+    function isPublicList(listId, shareId) {
+      return exists(/databases/$(database)/documents/lists/$(listId))
+        && get(/databases/$(database)/documents/lists/$(listId)).data.visibility == "public"
+        && get(/databases/$(database)/documents/lists/$(listId)).data.shareId == shareId;
+    }
+
+    function isPublicListAfter(listId, shareId) {
+      return existsAfter(/databases/$(database)/documents/lists/$(listId))
+        && getAfter(/databases/$(database)/documents/lists/$(listId)).data.visibility == "public"
+        && getAfter(/databases/$(database)/documents/lists/$(listId)).data.shareId == shareId;
+    }
+
     match /users/{uid} {
       allow read, create, update, delete: if signedIn() && request.auth.uid == uid;
     }
+
     match /lists/{listId} {
-      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid
+      allow create: if signedIn()
+        && request.resource.data.ownerUid == request.auth.uid
         && request.resource.data.keys().hasAll(['title','ownerUid','shareId','visibility'])
         && request.resource.data.visibility in ['public','private']
-        && !request.resource.data.keys().hasAny(['passwordHash','reservationStatuses','reservationCount','passwordHolderUid','passwordHolderName','reservationProtectionActivated']);
-      allow read: if ownsList();
-      allow update: if ownsList() && request.resource.data.ownerUid == resource.data.ownerUid
-        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['passwordHash','reservationStatuses','reservationCount','passwordHolderUid','passwordHolderName','reservationProtectionActivated','shareId','createdAt']);
-      allow delete: if ownsList();
+        && !request.resource.data.keys().hasAny([
+          'passwordHash','reservationStatuses','reservationCount',
+          'passwordHolderUid','passwordHolderName','reservationProtectionActivated'
+        ]);
+
+      allow read: if signedIn() && resource.data.ownerUid == request.auth.uid;
+
+      allow update: if signedIn()
+        && resource.data.ownerUid == request.auth.uid
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'passwordHash','reservationStatuses','reservationCount',
+          'passwordHolderUid','passwordHolderName','reservationProtectionActivated',
+          'shareId','createdAt'
+        ]);
+
+      allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+
       match /items/{itemId} {
-        allow read, write: if signedIn() && get(/databases/$(database)/documents/lists/$(listId)).data.ownerUid == request.auth.uid;
+        allow read, write: if ownsList(listId);
       }
     }
-    match /reservationSecrets/{shareId} { allow read, write: if false; }
-    match /reservationAccess/{grantId} { allow read, write: if false; }
-    match /reservations/{shareId}/items/{itemId} { allow read, write: if false; }
-    match /{document=**} { allow read, write: if false; }
+
+    // This collection contains only display-safe wishlist fields.
+    // It never contains owner UIDs, password hashes, password-holder names,
+    // reservation records, or reservation access grants.
+    match /publicWishlists/{shareId} {
+      allow read: if isPublicList(resource.data.listId, shareId);
+
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'listId','title','description','occasion','eventDate','passwordProtectionActive'
+        ])
+        && request.resource.data.keys().hasAll([
+          'listId','title','description','occasion','eventDate','passwordProtectionActive'
+        ])
+        && ownsListAfter(request.resource.data.listId)
+        && isPublicListAfter(request.resource.data.listId, shareId);
+
+      allow update: if (
+        signedIn()
+        && ownsList(resource.data.listId)
+        && isPublicList(resource.data.listId, shareId)
+        && request.resource.data.listId == resource.data.listId
+        && request.resource.data.keys().hasOnly([
+          'listId','title','description','occasion','eventDate','passwordProtectionActive'
+        ])
+      ) || (
+        signedIn()
+        && isPublicList(resource.data.listId, shareId)
+        && request.resource.data.listId == resource.data.listId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['passwordProtectionActive'])
+        && request.resource.data.passwordProtectionActive == true
+        && exists(/databases/$(database)/documents/reservationSecrets/$(shareId))
+      );
+
+      // The owner can remove a public mirror after switching a list to private.
+      allow delete: if ownsList(resource.data.listId);
+
+      match /items/{itemId} {
+        function parentListId() {
+          return get(/databases/$(database)/documents/publicWishlists/$(shareId)).data.listId;
+        }
+
+        allow read: if isPublicList(parentListId(), shareId);
+
+        allow create, update: if signedIn()
+          && ownsList(parentListId())
+          && isPublicList(parentListId(), shareId)
+          && request.resource.data.keys().hasOnly([
+            'name','description','imageUrl','purchaseUrl','price'
+          ]);
+
+        allow delete: if ownsList(parentListId());
+      }
+    }
+
+    // Reservation secrets and reservation records are server-only.
+    match /reservationSecrets/{shareId} {
+      allow read, write: if false;
+    }
+
+    match /reservationAccess/{grantId} {
+      allow read, write: if false;
+    }
+
+    match /reservations/{shareId}/items/{itemId} {
+      allow read, write: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
   }
 }
