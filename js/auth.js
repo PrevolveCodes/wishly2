@@ -2,7 +2,18 @@ import {auth,db} from "./firebase.js";
 import {createUserWithEmailAndPassword,signInWithEmailAndPassword,GoogleAuthProvider,signInWithPopup,sendPasswordResetEmail,onAuthStateChanged,updateProfile} from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
 import {doc,setDoc,serverTimestamp} from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
 const $=id=>document.getElementById(id),msg=$("message");
-const destination=()=>new URLSearchParams(location.search).get("redirect")==="view-list.html"?"view-list.html":"dashboard.html";
+const destination=()=>{
+  const requested=new URLSearchParams(location.search).get("redirect")||"";
+  if(requested==="view-list.html")return "view-list.html";
+  try{
+    const target=new URL(requested,location.origin);
+    if(target.origin===location.origin&&target.pathname.endsWith("/view-list.html")){
+      const share=target.searchParams.get("share")||target.searchParams.get("code");
+      return "view-list.html"+(share?"?share="+encodeURIComponent(share):"");
+    }
+  }catch{}
+  return "dashboard.html";
+};
 const say=(s,ok=false)=>{msg.textContent=s;msg.className="form-message"+(ok?" success":"")};
 onAuthStateChanged(auth,user=>{if(user)location.replace(destination())});
 async function profile(user,name){await setDoc(doc(db,"users",user.uid),{uid:user.uid,displayName:name||user.displayName||user.email.split("@")[0],email:user.email,createdAt:serverTimestamp(),updatedAt:serverTimestamp()},{merge:true})}
