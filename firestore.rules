@@ -85,6 +85,16 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly([
           'listId','title','description','occasion','eventDate','passwordProtectionActive'
         ])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'title','description','occasion','eventDate','passwordProtectionActive'
+        ])
+        && (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['passwordProtectionActive'])
+          || (
+            request.resource.data.passwordProtectionActive == true
+            && exists(/databases/$(database)/documents/reservationSecrets/$(shareId))
+          )
+        )
       ) || (
         signedIn()
         && isPublicList(resource.data.listId, shareId)
