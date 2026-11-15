@@ -80,7 +80,7 @@ async function syncPublicItems(listData){
 async function syncPublicMirror(listId,listData,itemsRef){
   const publicRef=doc(db,"publicWishlists",listData.shareId);
   await setDoc(doc(db,"publicWishlistIndex",listData.shareId),{listId},{merge:true});
-  await setDoc(publicRef,publicListData(listData),{merge:true});
+  await setDoc(publicRef,publicListData(listData));
   const snapshot=await getDocs(itemsRef);
   const docs=snapshot.docs;
   for(let start=0;start<docs.length;start+=400){
@@ -183,7 +183,7 @@ async function loadOne(){
           await updateDoc(listRef,{title:next.title,description:next.description,occasion:next.occasion,eventDate:next.eventDate,visibility:next.visibility,updatedAt:serverTimestamp()});
           if(next.visibility==="public"){
             await setDoc(publicIndexRef,{listId:id},{merge:true});
-            await setDoc(publicListRef,publicListData(next),{merge:true});
+            await setDoc(publicListRef,publicListData(next));
           }else{
             await syncPublicItems(next);
             await deleteDoc(publicListRef).catch(()=>{});
