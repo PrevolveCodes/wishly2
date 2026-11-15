@@ -55,6 +55,13 @@ async function openWishlist(code){
   try{
     const result=await getPublicWishlist({shareId:code});
     if(!result.data||!Array.isArray(result.data.items))throw new Error("We couldn't load that wishlist.");
+    if(result.data.isOwner){
+      message.textContent="That’s one of your own lists. Open it from My Lists to manage it.";
+      busy=false;
+      button.disabled=false;
+      button.textContent="Open wishlist →";
+      return;
+    }
     message.textContent="Wishlist found. Opening…";
     location.href="wishlist.html?share="+encodeURIComponent(code);
   }catch(error){
