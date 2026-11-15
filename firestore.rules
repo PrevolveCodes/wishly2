@@ -10,8 +10,9 @@ service cloud.firestore {
       allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid
         && request.resource.data.keys().hasAll(['title','ownerUid','shareId','visibility']);
       allow read: if ownsList();
-      allow update, delete: if ownsList() && request.resource.data.ownerUid == resource.data.ownerUid
+      allow update: if ownsList() && request.resource.data.ownerUid == resource.data.ownerUid
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['passwordHash','reservationStatuses','reservationCount','passwordHolderUid','passwordHolderName','reservationProtectionActivated','shareId','createdAt']);
+      allow delete: if ownsList();
       match /items/{itemId} {
         allow read, write: if signedIn() && get(/databases/$(database)/documents/lists/$(listId)).data.ownerUid == request.auth.uid;
       }
