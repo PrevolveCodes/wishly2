@@ -21,6 +21,7 @@ The Firebase web config is in `js/firebase.js`. It is a public client configurat
 - Reservation secrets and reservation records deny all direct client reads and writes.
 - Cloud Functions hash reservation passwords with per-list random salts and Node's scrypt implementation.
 - The first signed-in non-owner visitor claims the password-holder role in a Firestore transaction.
+- A successful password check creates a server-side account grant, so that visitor does not need to re-enter the password on every visit.
 - Reservations are created atomically; a second reservation for the same item is rejected.
 - The creator-facing list contains the password-holder display name only. Reservation statuses are not returned to the creator's account.
 
