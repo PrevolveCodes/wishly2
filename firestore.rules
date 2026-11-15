@@ -11,7 +11,7 @@ service cloud.firestore {
         && request.resource.data.keys().hasAll(['title','ownerUid','shareId','visibility']);
       allow read: if ownsList();
       allow update, delete: if ownsList() && request.resource.data.ownerUid == resource.data.ownerUid
-        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['passwordHash','reservationStatuses','reservationCount','passwordHolderUid']);
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['passwordHash','reservationStatuses','reservationCount','passwordHolderUid','passwordHolderName','reservationProtectionActivated','shareId','createdAt']);
       match /items/{itemId} {
         allow read, write: if signedIn() && get(/databases/$(database)/documents/lists/$(listId)).data.ownerUid == request.auth.uid;
       }
