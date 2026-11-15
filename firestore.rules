@@ -143,7 +143,8 @@ service cloud.firestore {
       allow delete: if indexExists(shareId) && ownsList(indexedListId(shareId));
 
       match /items/{itemId} {
-        allow read: if isPublicShare(shareId);
+        allow read: if isPublicShare(shareId)
+          || (indexExists(shareId) && ownsList(indexedListId(shareId)));
 
         allow create, update: if signedIn()
           && isPublicShare(shareId)
