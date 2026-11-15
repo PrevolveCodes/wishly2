@@ -12,7 +12,10 @@ onAuthStateChanged(auth,user=>{
   gate.hidden=signedIn;
   form.hidden=!signedIn;
   if(!signedIn){
-    $("login-link").href="login.html?redirect=view-list.html";
+    const params=new URLSearchParams(location.search);
+    const share=params.get("share")||params.get("code");
+    const returnTo="view-list.html"+(share?"?share="+encodeURIComponent(share):"");
+    $("login-link").href="login.html?redirect="+encodeURIComponent(returnTo);
     return;
   }
   const incoming=new URLSearchParams(location.search).get("share")||new URLSearchParams(location.search).get("code");
