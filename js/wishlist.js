@@ -32,7 +32,7 @@ async function load(){
     const publicSnapshot=await getDoc(publicRef);
     if(!publicSnapshot.exists())throw Object.assign(new Error("This wishlist is private, unavailable, or the link is invalid."),{code:"not-found"});
     const data=publicSnapshot.data();
-    if(typeof data.listId!=="string"||!data.title)throw new Error("The wishlist data was incomplete.");
+    if(typeof data.title!=="string"||!data.title)throw new Error("The wishlist data was incomplete.");
     const itemsSnapshot=await getDocs(collection(publicRef,"items"));
     list={
       title:data.title,description:data.description||"",occasion:data.occasion||"",
