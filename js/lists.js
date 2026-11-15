@@ -16,7 +16,7 @@ const safeUrl=value=>{
 const publicListData=data=>({
   title:String(data.title||""),description:String(data.description||""),
   occasion:String(data.occasion||""),eventDate:typeof data.eventDate==="string"?data.eventDate:null,
-  passwordProtectionActive:!!data.reservationProtectionActivated
+  passwordProtectionActive:!!data.reservationProtectionActivated,mirrorVersion:1
 });
 const publicItemData=item=>({
   name:String(item.name||""),description:String(item.description||""),
@@ -81,6 +81,10 @@ async function syncPublicMirror(listId,listData,itemsRef){
   const publicRef=doc(db,"publicWishlists",listData.shareId);
   await setDoc(doc(db,"publicWishlistIndex",listData.shareId),{listId},{merge:true});
   const existingPublic=await getDoc(publicRef);
+  if(existingPublic.exists()&&existingPublic.data().mirrorVersion===1){
+    await setDoc(publicRef,publicListData(listData));
+    return;
+  }
   if(existingPublic.exists())await deleteDoc(publicRef);
   const [privateSnapshot,publicSnapshot]=await Promise.all([getDocs(itemsRef),getDocs(collection(db,"publicWishlists",listData.shareId,"items"))]);
   const privateIds=new Set(privateSnapshot.docs.map(item=>item.id));
