@@ -80,9 +80,13 @@ async function syncPublicItems(listData){
 async function syncPublicMirror(listId,listData,itemsRef){
   const publicRef=doc(db,"publicWishlists",listData.shareId);
   await setDoc(doc(db,"publicWishlistIndex",listData.shareId),{listId},{merge:true});
-  await setDoc(publicRef,publicListData(listData));
-  const snapshot=await getDocs(itemsRef);
-  const docs=snapshot.docs;
+  const existingPublic=await getDoc(publicRef);
+  if(existingPublic.exists())await deleteDoc(publicRef);
+  const [privateSnapshot,publicSnapshot]=await Promise.all([getDocs(itemsRef),getDocs(collection(db,"publicWishlists",listData.shareId,"items"))]);
+  const privateIds=new Set(privateSnapshot.docs.map(item=>item.id));
+  const stale=publicSnapshot.docs.filter(item=>!privateIds.has(item.id));
+  await Promise.all(stale.map(item=>deleteDoc(item.ref)));
+  const docs=privateSnapshot.docs;
   for(let start=0;start<docs.length;start+=400){
     const batch=writeBatch(db);
     docs.slice(start,start+400).forEach(item=>{
@@ -90,6 +94,7 @@ async function syncPublicMirror(listId,listData,itemsRef){
     });
     await batch.commit();
   }
+  await setDoc(publicRef,publicListData(listData));
 }
 
 async function loadOne(){
@@ -228,10 +233,12 @@ async function loadOne(){
         const button=$("delete-list");button.disabled=true;
         try{
           const current=await getDocs(itemsRef);
-          const publicItems=await getDocs(collection(db,"publicWishlists",listData.shareId,"items"));
+          const publicItems=listData.visibility==="public"?await getDocs(collection(db,"publicWishlists",listData.shareId,"items")):{docs:[]};
           await Promise.all([...current.docs,...publicItems.docs].map(item=>deleteDoc(item.ref)));
-          await deleteDoc(publicListRef).catch(()=>{});
-          await deleteDoc(publicIndexRef).catch(()=>{});
+          if(listData.visibility==="public"){
+            await deleteDoc(publicListRef).catch(()=>{});
+            await deleteDoc(publicIndexRef).catch(()=>{});
+          }
           await deleteDoc(listRef);
           location.href="my-lists.html";
         }catch(error){button.disabled=false;alert(error.message||"Couldn't delete this list.")}
