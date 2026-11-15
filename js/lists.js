@@ -62,6 +62,9 @@ $("create-list")?.addEventListener("submit",async event=>{
 async function loadAll(){
   try{
     const snapshot=await getDocs(query(collection(db,"lists"),where("ownerUid","==",user.uid)));
+    await Promise.all(snapshot.docs.filter(d=>d.data().visibility==="public").map(d=>
+      syncPublicMirror(d.id,d.data(),collection(doc(db,"lists",d.id),"items")).catch(error=>console.error("Public wishlist mirror sync failed:",d.id,error))
+    ));
     $("all-lists").innerHTML=snapshot.empty
       ?'<div class="empty-state"><div class="empty-symbol">＋</div><h3>No lists yet</h3><p>Create a list to start collecting wishes.</p><a class="button button-dark" href="make-list.html">Make a list</a></div>'
       :snapshot.docs.map(d=>{
