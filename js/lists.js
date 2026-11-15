@@ -74,6 +74,20 @@ async function syncPublicItems(listData){
   await Promise.all(snapshot.docs.map(item=>deleteDoc(item.ref)));
 }
 
+async function syncPublicMirror(listId,listData,itemsRef){
+  const publicRef=doc(db,"publicWishlists",listData.shareId);
+  await setDoc(publicRef,publicListData(listId,listData),{merge:true});
+  const snapshot=await getDocs(itemsRef);
+  const docs=snapshot.docs;
+  for(let start=0;start<docs.length;start+=400){
+    const batch=writeBatch(db);
+    docs.slice(start,start+400).forEach(item=>{
+      batch.set(doc(db,"publicWishlists",listData.shareId,"items",item.id),publicItemData(item.data()));
+    });
+    await batch.commit();
+  }
+}
+
 async function loadOne(){
   const id=new URLSearchParams(location.search).get("id");
   const root=$("list-detail");
@@ -85,6 +99,11 @@ async function loadOne(){
     let listData=snapshot.data();
     const itemsRef=collection(listRef,"items");
     const publicListRef=doc(db,"publicWishlists",listData.shareId);
+    if(listData.visibility==="public")await syncPublicMirror(id,listData,itemsRef);
+    else{
+      await syncPublicItems(listData);
+      await deleteDoc(publicListRef).catch(()=>{});
+    }
     let itemRows=[];
     const editingItems=new Set();
     let stopItems=null;
