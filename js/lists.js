@@ -86,6 +86,12 @@ async function loadOne(){
           <div class="owner-item-actions"><button class="small-danger" data-edit-item="${esc(item.id)}" ${editingItems.has(item.id)?"disabled":""}>Edit</button> <button class="small-danger" data-delete-item="${esc(item.id)}" ${editingItems.has(item.id)?"disabled":""}>Remove</button></div>
         </article>`;
       }).join(""):'<p class="muted">No items yet.</p>';
+      host.querySelectorAll(".owner-item-image").forEach(image=>image.addEventListener("error",()=>{
+        const placeholder=document.createElement("div");
+        placeholder.className="item-placeholder";
+        placeholder.textContent="♡";
+        image.replaceWith(placeholder);
+      },{once:true}));
       host.querySelectorAll("[data-edit-item]").forEach(button=>button.addEventListener("click",()=>editItem(button.dataset.editItem,button)));
       host.querySelectorAll("[data-delete-item]").forEach(button=>button.addEventListener("click",()=>removeItem(button.dataset.deleteItem,button)));
     }
