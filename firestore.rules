@@ -83,7 +83,7 @@ service cloud.firestore {
 
     // Hidden lookup mapping: clients cannot read this collection.
     match /publicWishlistIndex/{shareId} {
-      allow read: if false;
+      allow read: if ownsList(resource.data.listId);
 
       allow create: if signedIn()
         && request.resource.data.keys().hasOnly(['listId'])
