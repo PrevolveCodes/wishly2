@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>View a list — Wishly</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body class="app-body">
+  <aside class="sidebar">
+    <a class="brand" href="dashboard.html"><span class="brand-mark">w</span> wishly</a>
+    <nav>
+      <span class="nav-caption">WORKSPACE</span>
+      <a class="nav-link" href="dashboard.html">◫ &nbsp; Overview</a>
+      <a class="nav-link" href="make-list.html">＋ &nbsp; Make a list</a>
+      <a class="nav-link" href="my-lists.html">▤ &nbsp; My lists</a>
+      <a class="nav-link active" href="view-list.html">⌕ &nbsp; View a list</a>
+      <a class="nav-link" href="families.html">⌂ &nbsp; Families</a>
+    </nav>
+    <div class="sidebar-bottom"><button id="logout" class="nav-link">↪ &nbsp; Log out</button></div>
+  </aside>
+  <main class="app-main">
+    <header class="app-top"><span>YOUR WORKSPACE</span><span class="avatar" id="avatar">W</span></header>
+    <section class="app-content narrow">
+      <div class="page-heading">
+        <div><span class="eyebrow">SHARED WITH YOU</span><h1 class="page-title">View a list.</h1><p>Open someone else’s wishlist with their share link or code.</p></div>
+      </div>
+      <div id="sign-in-required" class="panel" hidden>
+        <h2>Log in to view a list</h2>
+        <p class="muted">You need to be signed in to open a shared wishlist from here.</p>
+        <a class="button button-dark" id="login-link" href="login.html?redirect=view-list.html">Log in</a>
+      </div>
+      <form id="lookup-form" class="panel form-stack" hidden>
+        <label for="list-reference">Wishlist share link or code</label>
+        <input class="app-input" id="list-reference" type="text" autocomplete="url" placeholder="Paste a Wishly link or enter a share code" required>
+        <p class="muted">Use the link or share code given to you by the list creator.</p>
+        <button class="button button-dark" type="submit">Open wishlist →</button>
+        <p id="lookup-message" class="form-message" role="status"></p>
+      </form>
+    </section>
+  </main>
+  <script type="module" src="js/view-list.js"></script>
+</body>
+</html>
