@@ -105,10 +105,10 @@ service cloud.firestore {
 
       allow create: if signedIn()
         && request.resource.data.keys().hasOnly([
-          'title','description','occasion','eventDate','passwordProtectionActive'
+          'title','description','occasion','eventDate','passwordProtectionActive','mirrorVersion'
         ])
         && request.resource.data.keys().hasAll([
-          'title','description','occasion','eventDate','passwordProtectionActive'
+          'title','description','occasion','eventDate','passwordProtectionActive','mirrorVersion'
         ])
         && existsAfter(/databases/$(database)/documents/publicWishlistIndex/$(shareId))
         && ownsListAfter(getAfter(/databases/$(database)/documents/publicWishlistIndex/$(shareId)).data.listId)
@@ -119,10 +119,10 @@ service cloud.firestore {
         && isPublicShare(shareId)
         && ownsList(indexedListId(shareId))
         && request.resource.data.keys().hasOnly([
-          'title','description','occasion','eventDate','passwordProtectionActive'
+          'title','description','occasion','eventDate','passwordProtectionActive','mirrorVersion'
         ])
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'title','description','occasion','eventDate','passwordProtectionActive'
+          'title','description','occasion','eventDate','passwordProtectionActive','mirrorVersion'
         ])
         && (
           !request.resource.data.diff(resource.data).affectedKeys().hasAny(['passwordProtectionActive'])
