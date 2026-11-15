@@ -1,7 +1,7 @@
 import {auth,db} from "./firebase.js";
 import {onAuthStateChanged,signOut} from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
 import {
-  collection,addDoc,query,where,getDocs,doc,getDoc,setDoc,updateDoc,deleteDoc,
+  collection,addDoc,query,where,getDocs,doc,getDoc,updateDoc,deleteDoc,writeBatch,
   serverTimestamp,increment,onSnapshot
 } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
 
@@ -64,7 +64,7 @@ async function loadOne(){
     let listData=snapshot.data();
     const itemsRef=collection(listRef,"items");
     let itemRows=[];
-    let itemCount=0;
+    const editingItems=new Set();
     let stopItems=null;
 
     function renderItems(){
@@ -83,7 +83,7 @@ async function loadOne(){
               ${purchase?`<a class="purchase-link" href="${esc(purchase)}" target="_blank" rel="noopener noreferrer">View product ↗</a>`:""}
             </div>
           </div>
-          <div class="owner-item-actions"><button class="small-danger" data-edit-item="${esc(item.id)}">Edit</button> <button class="small-danger" data-delete-item="${esc(item.id)}">Remove</button></div>
+          <div class="owner-item-actions"><button class="small-danger" data-edit-item="${esc(item.id)}" ${editingItems.has(item.id)?"disabled":""}>Edit</button> <button class="small-danger" data-delete-item="${esc(item.id)}" ${editingItems.has(item.id)?"disabled":""}>Remove</button></div>
         </article>`;
       }).join(""):'<p class="muted">No items yet.</p>';
       host.querySelectorAll("[data-edit-item]").forEach(button=>button.addEventListener("click",()=>editItem(button.dataset.editItem,button)));
@@ -153,8 +153,10 @@ async function loadOne(){
         const item={id:newRef.id,name,description:$("item-desc").value.trim(),imageUrl,purchaseUrl,price,createdAt:serverTimestamp()};
         button.disabled=true;message.textContent="Adding…";
         try{
-          await setDoc(newRef,item);
-          await updateDoc(listRef,{itemCount:increment(1),updatedAt:serverTimestamp()});
+          const batch=writeBatch(db);
+          batch.set(newRef,item);
+          batch.update(listRef,{itemCount:increment(1),updatedAt:serverTimestamp()});
+          await batch.commit();
           form.reset();message.textContent="Item added.";message.classList.add("success");
         }catch(error){message.textContent=error.message||"Couldn't add this item.";message.classList.remove("success")}
         finally{button.disabled=false}
@@ -174,38 +176,43 @@ async function loadOne(){
 
     async function editItem(itemId,button){
       const current=itemRows.find(item=>item.id===itemId);
-      if(!current||button.disabled)return;
-      const name=prompt("Item name",current.name||"");if(name===null)return;
-      const description=prompt("Description",current.description||"");if(description===null)return;
-      const imageUrl=prompt("Image URL",current.imageUrl||"");if(imageUrl===null)return;
-      const purchaseUrl=prompt("Purchase URL",current.purchaseUrl||"");if(purchaseUrl===null)return;
-      const priceText=prompt("Price (leave blank for none)",current.price??"");if(priceText===null)return;
-      const cleanImage=imageUrl.trim(),cleanPurchase=purchaseUrl.trim();
-      if(cleanImage&&!safeUrl(cleanImage)){alert("Enter a valid image URL starting with http:// or https://.");return}
-      if(cleanPurchase&&!safeUrl(cleanPurchase)){alert("Enter a valid purchase URL starting with http:// or https://.");return}
-      const price=priceText.trim()===""?null:Number(priceText);
-      if(price!==null&&(!Number.isFinite(price)||price<0)){alert("Enter a valid price.");return}
-      const patch={name:name.trim(),description:description.trim(),imageUrl:cleanImage,purchaseUrl:cleanPurchase,price};
-      const ref=doc(itemsRef,itemId);
-      button.disabled=true;
-      try{await updateDoc(ref,patch)}
-      catch(error){alert(error.message||"Couldn't update this item. Your previous item data has been restored.")}
-      finally{button.disabled=false}
+      if(!current||editingItems.has(itemId))return;
+      editingItems.add(itemId);
+      renderItems();
+      try{
+        const name=prompt("Item name",current.name||"");if(name===null)return;
+        const description=prompt("Description",current.description||"");if(description===null)return;
+        const imageUrl=prompt("Image URL",current.imageUrl||"");if(imageUrl===null)return;
+        const purchaseUrl=prompt("Purchase URL",current.purchaseUrl||"");if(purchaseUrl===null)return;
+        const priceText=prompt("Price (leave blank for none)",current.price??"");if(priceText===null)return;
+        const cleanImage=imageUrl.trim(),cleanPurchase=purchaseUrl.trim();
+        if(cleanImage&&!safeUrl(cleanImage)){alert("Enter a valid image URL starting with http:// or https://.");return}
+        if(cleanPurchase&&!safeUrl(cleanPurchase)){alert("Enter a valid purchase URL starting with http:// or https://.");return}
+        const price=priceText.trim()===""?null:Number(priceText);
+        if(price!==null&&(!Number.isFinite(price)||price<0)){alert("Enter a valid price.");return}
+        const patch={name:name.trim(),description:description.trim(),imageUrl:cleanImage,purchaseUrl:cleanPurchase,price};
+        await updateDoc(doc(itemsRef,itemId),patch);
+      }catch(error){
+        alert(error.message||"Couldn't update this item. Your previous item data has been restored.");
+      }finally{
+        editingItems.delete(itemId);
+        renderItems();
+      }
     }
-
     async function removeItem(itemId,button){
       if(!confirm("Remove this item?"))return;
       button.disabled=true;
       try{
-        await deleteDoc(doc(itemsRef,itemId));
-        await updateDoc(listRef,{itemCount:increment(-1),updatedAt:serverTimestamp()});
+        const batch=writeBatch(db);
+        batch.delete(doc(itemsRef,itemId));
+        batch.update(listRef,{itemCount:increment(-1),updatedAt:serverTimestamp()});
+        await batch.commit();
       }catch(error){button.disabled=false;alert(error.message||"Couldn't remove this item.")}
     }
 
     renderShell();
     stopItems=onSnapshot(itemsRef,itemsSnapshot=>{
       itemRows=itemsSnapshot.docs.map(item=>({id:item.id,...item.data()}));
-      itemCount=itemRows.length;
       renderItems();
     },error=>{$("owner-items").textContent=error.message||"Couldn't load wishlist items."});
     window.addEventListener("pagehide",()=>stopItems?.(),{once:true});
