@@ -22,6 +22,12 @@ async function load(){
   }
 }
 function render(){root.innerHTML=`<span class="eyebrow">A WISHLY LIST</span><h1 class="public-title">${esc(list.title)}</h1><p class="public-description">${esc(list.description)}</p><div class="public-meta">${esc(list.occasion||"A collection of wishes")} ${list.eventDate?" · "+esc(list.eventDate):""}</div><div id="holder-message"></div><div id="password-area"></div><div class="public-items" id="items">${(list.items||[]).map(i=>`<article class="public-item"><div class="public-item-main">${safeUrl(i.imageUrl)?'<img src="'+esc(safeUrl(i.imageUrl))+'" alt="" loading="lazy">':'<div class="item-placeholder">♡</div>'}<div><h3>${esc(i.name)}</h3><p>${esc(i.description)}</p>${i.price!=null?'<small>$'+Number(i.price).toFixed(2)+'</small>':""}${safeUrl(i.purchaseUrl)?'<a class="purchase-link" href="'+esc(safeUrl(i.purchaseUrl))+'" target="_blank" rel="noopener noreferrer">View item ↗</a>':""}</div></div><div class="reserve-zone" data-item="${esc(i.id)}"></div></article>`).join("")||'<p class="muted">This list is still empty.</p>'}</div>`;
+document.querySelectorAll(".public-item-main img").forEach(image=>image.addEventListener("error",()=>{
+  const placeholder=document.createElement("div");
+  placeholder.className="item-placeholder";
+  placeholder.textContent="♡";
+  image.replaceWith(placeholder);
+},{once:true}));
 if(user&&list.isOwner){$("holder-message").innerHTML=list.passwordHolderName?'<div class="notice"><b>Reservation protection activated</b><p>The first person to open your wishlist is <b>'+esc(list.passwordHolderName)+'</b>.</p><p>Tell gift buyers to contact this person for the reservation password. Your reservation statuses are hidden from you.</p></div>':'<div class="notice">You’re viewing your own list. Reservation details are hidden from the list creator.</div>';return}
 if(user){initializeViewer()}else{$("password-area").innerHTML='<div class="notice">You can browse this list without an account. <a href="login.html">Log in</a> to reserve a gift.</div>'}}
 const $=id=>document.getElementById(id);
