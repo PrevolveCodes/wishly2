@@ -1,6 +1,6 @@
 import {auth,db} from "./firebase.js";
 import {onAuthStateChanged,signOut} from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
-import {collection,query,where,getDocs,doc,getDoc,orderBy,limit} from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
+import {collection,query,where,getDocs,doc,getDoc,limit} from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
 const $=id=>document.getElementById(id);
 const escapeHTML=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 let currentUser;
