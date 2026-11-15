@@ -13,8 +13,8 @@ const safeUrl=value=>{
     return url.protocol==="https:"||url.protocol==="http:"?url.href:"";
   }catch{return ""}
 };
-const publicListData=(listId,data)=>({
-  listId,title:String(data.title||""),description:String(data.description||""),
+const publicListData=data=>({
+  title:String(data.title||""),description:String(data.description||""),
   occasion:String(data.occasion||""),eventDate:typeof data.eventDate==="string"?data.eventDate:null,
   passwordProtectionActive:!!data.reservationProtectionActivated
 });
@@ -50,7 +50,10 @@ $("create-list")?.addEventListener("submit",async event=>{
     };
     const batch=writeBatch(db);
     batch.set(ref,data);
-    if(data.visibility==="public")batch.set(doc(db,"publicWishlists",data.shareId),publicListData(ref.id,data));
+    if(data.visibility==="public"){
+      batch.set(doc(db,"publicWishlistIndex",data.shareId),{listId:ref.id});
+      batch.set(doc(db,"publicWishlists",data.shareId),publicListData(data));
+    }
     await batch.commit();
     location.href="list.html?id="+encodeURIComponent(ref.id);
   }catch(error){message.textContent=error.message||"Couldn't create your list.";button.disabled=false}
@@ -76,7 +79,8 @@ async function syncPublicItems(listData){
 
 async function syncPublicMirror(listId,listData,itemsRef){
   const publicRef=doc(db,"publicWishlists",listData.shareId);
-  await setDoc(publicRef,publicListData(listId,listData),{merge:true});
+  await setDoc(doc(db,"publicWishlistIndex",listData.shareId),{listId},{merge:true});
+  await setDoc(publicRef,publicListData(listData),{merge:true});
   const snapshot=await getDocs(itemsRef);
   const docs=snapshot.docs;
   for(let start=0;start<docs.length;start+=400){
@@ -99,6 +103,7 @@ async function loadOne(){
     let listData=snapshot.data();
     const itemsRef=collection(listRef,"items");
     const publicListRef=doc(db,"publicWishlists",listData.shareId);
+    const publicIndexRef=doc(db,"publicWishlistIndex",listData.shareId);
     if(listData.visibility==="public")await syncPublicMirror(id,listData,itemsRef);
     else{
       await syncPublicItems(listData);
@@ -177,10 +182,12 @@ async function loadOne(){
         try{
           await updateDoc(listRef,{title:next.title,description:next.description,occasion:next.occasion,eventDate:next.eventDate,visibility:next.visibility,updatedAt:serverTimestamp()});
           if(next.visibility==="public"){
-            await setDoc(publicListRef,publicListData(id,next),{merge:true});
+            await setDoc(publicIndexRef,{listId:id},{merge:true});
+            await setDoc(publicListRef,publicListData(next),{merge:true});
           }else{
             await syncPublicItems(next);
             await deleteDoc(publicListRef).catch(()=>{});
+            await deleteDoc(publicIndexRef).catch(()=>{});
           }
           message.textContent="Saved.";message.classList.add("success");
         }catch(error){
@@ -224,6 +231,7 @@ async function loadOne(){
           const publicItems=await getDocs(collection(db,"publicWishlists",listData.shareId,"items"));
           await Promise.all([...current.docs,...publicItems.docs].map(item=>deleteDoc(item.ref)));
           await deleteDoc(publicListRef).catch(()=>{});
+          await deleteDoc(publicIndexRef).catch(()=>{});
           await deleteDoc(listRef);
           location.href="my-lists.html";
         }catch(error){button.disabled=false;alert(error.message||"Couldn't delete this list.")}
