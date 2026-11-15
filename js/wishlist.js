@@ -1,11 +1,26 @@
 import {auth,functions} from "./firebase.js";
 import {onAuthStateChanged} from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
 import {httpsCallable} from "https://www.gstatic.com/firebasejs/11.6.0/firebase-functions.js";
-const safeUrl=value=>{try{const u=new URL(value,location.href);return u.protocol==="http:"||u.protocol==="https:"?u.href:""}catch{return ""}};const root=document.getElementById("public-list"),share=new URLSearchParams(location.search).get("share"),esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const safeUrl=value=>{try{const u=new URL(String(value||"").trim(),location.href);return u.protocol==="http:"||u.protocol==="https:"?u.href:""}catch{return ""}};const params=new URLSearchParams(location.search),rawShare=params.get("share")||params.get("code")||params.get("shareId"),share=(()=>{if(!rawShare)return "";try{const u=new URL(rawShare);return u.searchParams.get("share")||u.searchParams.get("code")||u.searchParams.get("shareId")||""}catch{return rawShare.trim()}})(),root=document.getElementById("public-list"),esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const getPublic=httpsCallable(functions,"getPublicWishlist"),getStatuses=httpsCallable(functions,"getReservationStatuses"),claim=httpsCallable(functions,"claimReservationPassword"),unlock=httpsCallable(functions,"unlockReservations"),reserve=httpsCallable(functions,"reserveGift"),cancel=httpsCallable(functions,"cancelReservation");
 let user=null,list=null,unlocked=false;
 onAuthStateChanged(auth,u=>{user=u;load()});
-async function load(){if(!share){root.textContent="This wishlist link is missing.";return}try{const res=await getPublic({shareId:share});list=res.data;if(list.private){root.textContent="This wishlist is private.";return}render()}catch(e){root.textContent=e.message||"This wishlist isn't available."}}
+async function load(){
+  if(!share){root.textContent="This wishlist link is missing or invalid.";return}
+  root.innerHTML='<div class="skeleton"></div>';
+  try{
+    const res=await getPublic({shareId:share});
+    list=res.data;
+    if(!list||!Array.isArray(list.items))throw new Error("The wishlist data was incomplete.");
+    render();
+  }catch(e){
+    console.error("Wishly shared wishlist load failed:",e);
+    if(e.code?.includes("permission-denied"))root.textContent="This wishlist is private and can’t be opened with this link.";
+    else if(e.code?.includes("not-found")||e.code?.includes("invalid-argument"))root.textContent="We couldn’t find a wishlist with that link or code. Check it and try again.";
+    else if(e.code?.includes("internal"))root.textContent="Wishly couldn’t load this wishlist right now. Please try again in a moment.";
+    else root.textContent=e.message||"This wishlist isn’t available. Please check the link and try again.";
+  }
+}
 function render(){root.innerHTML=`<span class="eyebrow">A WISHLY LIST</span><h1 class="public-title">${esc(list.title)}</h1><p class="public-description">${esc(list.description)}</p><div class="public-meta">${esc(list.occasion||"A collection of wishes")} ${list.eventDate?" · "+esc(list.eventDate):""}</div><div id="holder-message"></div><div id="password-area"></div><div class="public-items" id="items">${(list.items||[]).map(i=>`<article class="public-item"><div class="public-item-main">${safeUrl(i.imageUrl)?'<img src="'+esc(safeUrl(i.imageUrl))+'" alt="" loading="lazy">':'<div class="item-placeholder">♡</div>'}<div><h3>${esc(i.name)}</h3><p>${esc(i.description)}</p>${i.price!=null?'<small>$'+Number(i.price).toFixed(2)+'</small>':""}${safeUrl(i.purchaseUrl)?'<a class="purchase-link" href="'+esc(safeUrl(i.purchaseUrl))+'" target="_blank" rel="noopener noreferrer">View item ↗</a>':""}</div></div><div class="reserve-zone" data-item="${esc(i.id)}"></div></article>`).join("")||'<p class="muted">This list is still empty.</p>'}</div>`;
 if(user&&list.isOwner){$("holder-message").innerHTML=list.passwordHolderName?'<div class="notice"><b>Reservation protection activated</b><p>The first person to open your wishlist is <b>'+esc(list.passwordHolderName)+'</b>.</p><p>Tell gift buyers to contact this person for the reservation password. Your reservation statuses are hidden from you.</p></div>':'<div class="notice">You’re viewing your own list. Reservation details are hidden from the list creator.</div>';return}
 if(user){initializeViewer()}else{$("password-area").innerHTML='<div class="notice">You can browse this list without an account. <a href="login.html">Log in</a> to reserve a gift.</div>'}}
