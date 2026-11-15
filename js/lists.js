@@ -72,6 +72,8 @@ async function loadAll(){
 }
 
 async function syncPublicItems(listData){
+  const index=await getDoc(doc(db,"publicWishlistIndex",listData.shareId)).catch(()=>null);
+  if(!index?.exists())return;
   const ref=collection(db,"publicWishlists",listData.shareId,"items");
   const snapshot=await getDocs(ref);
   await Promise.all(snapshot.docs.map(item=>deleteDoc(item.ref)));
@@ -117,6 +119,7 @@ async function loadOne(){
     else{
       await syncPublicItems(listData);
       await deleteDoc(publicListRef).catch(()=>{});
+      await deleteDoc(publicIndexRef).catch(()=>{});
     }
     let itemRows=[];
     const editingItems=new Set();
