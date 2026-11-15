@@ -8,7 +8,9 @@ service cloud.firestore {
     }
     match /lists/{listId} {
       allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid
-        && request.resource.data.keys().hasAll(['title','ownerUid','shareId','visibility']);
+        && request.resource.data.keys().hasAll(['title','ownerUid','shareId','visibility'])
+        && request.resource.data.visibility in ['public','private']
+        && !request.resource.data.keys().hasAny(['passwordHash','reservationStatuses','reservationCount','passwordHolderUid','passwordHolderName','reservationProtectionActivated']);
       allow read: if ownsList();
       allow update: if ownsList() && request.resource.data.ownerUid == resource.data.ownerUid
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['passwordHash','reservationStatuses','reservationCount','passwordHolderUid','passwordHolderName','reservationProtectionActivated','shareId','createdAt']);
@@ -18,6 +20,7 @@ service cloud.firestore {
       }
     }
     match /reservationSecrets/{shareId} { allow read, write: if false; }
+    match /reservationAccess/{grantId} { allow read, write: if false; }
     match /reservations/{shareId}/items/{itemId} { allow read, write: if false; }
     match /{document=**} { allow read, write: if false; }
   }
