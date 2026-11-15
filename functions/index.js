@@ -31,7 +31,7 @@ exports.getPublicWishlist=onCall(async request=>{
       title:String(data.title||""),
       description:String(data.description||""),
       occasion:String(data.occasion||""),
-      eventDate:data.eventDate||null,
+      eventDate:typeof data.eventDate==="string"?data.eventDate:null,
       isOwner,
       passwordProtectionActive:!!data.reservationProtectionActivated,
       passwordHolderName:isOwner?(data.passwordHolderName||null):null,
