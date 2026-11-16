@@ -1,52 +1,36 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function signedIn() {
-      return request.auth != null;
-    }
-
-    function ownsList(listId) {
-      return signedIn()
-        && exists(/databases/$(database)/documents/lists/$(listId))
-        && get(/databases/$(database)/documents/lists/$(listId)).data.ownerUid == request.auth.uid;
-    }
-
+    function signedIn() { return request.auth != null; }
+    function docPath(p) { return /databases/$(database)/documents/$(p); }
     function ownsListAfter(listId) {
-      return signedIn()
-        && existsAfter(/databases/$(database)/documents/lists/$(listId))
-        && getAfter(/databases/$(database)/documents/lists/$(listId)).data.ownerUid == request.auth.uid;
+      return signedIn() && existsAfter(docPath('lists/' + listId))
+        && getAfter(docPath('lists/' + listId)).data.ownerUid == request.auth.uid;
     }
-
+    function ownsList(listId) {
+      return signedIn() && exists(docPath('lists/' + listId))
+        && get(docPath('lists/' + listId)).data.ownerUid == request.auth.uid;
+    }
     function isPublicList(listId, shareId) {
-      return exists(/databases/$(database)/documents/lists/$(listId))
-        && get(/databases/$(database)/documents/lists/$(listId)).data.visibility == "public"
-        && get(/databases/$(database)/documents/lists/$(listId)).data.shareId == shareId;
+      return exists(docPath('lists/' + listId))
+        && get(docPath('lists/' + listId)).data.visibility == 'public'
+        && get(docPath('lists/' + listId)).data.shareId == shareId;
     }
-
-    function isPublicListAfter(listId, shareId) {
-      return existsAfter(/databases/$(database)/documents/lists/$(listId))
-        && getAfter(/databases/$(database)/documents/lists/$(listId)).data.visibility == "public"
-        && getAfter(/databases/$(database)/documents/lists/$(listId)).data.shareId == shareId;
-    }
-
-    function indexExists(shareId) {
-      return exists(/databases/$(database)/documents/publicWishlistIndex/$(shareId));
-    }
-
-    function indexedListId(shareId) {
-      return get(/databases/$(database)/documents/publicWishlistIndex/$(shareId)).data.listId;
-    }
-
+    function indexExists(shareId) { return exists(docPath('publicWishlistIndex/' + shareId)); }
+    function indexedListId(shareId) { return get(docPath('publicWishlistIndex/' + shareId)).data.listId; }
     function isPublicShare(shareId) {
       return indexExists(shareId) && isPublicList(indexedListId(shareId), shareId);
     }
-
-    function isPublicShareAfter(shareId) {
-      return existsAfter(/databases/$(database)/documents/publicWishlistIndex/$(shareId))
-        && isPublicListAfter(
-          getAfter(/databases/$(database)/documents/publicWishlistIndex/$(shareId)).data.listId,
-          shareId
-        );
+    function isOwner(shareId) {
+      return signedIn() && isPublicShare(shareId)
+        && get(docPath('lists/' + indexedListId(shareId))).data.ownerUid == request.auth.uid;
+    }
+    function grantPath(shareId, uid) { return docPath('reservationAccess/' + shareId + '_' + uid); }
+    function hasGrant(shareId) {
+      return signedIn() && !isOwner(shareId)
+        && exists(grantPath(shareId, request.auth.uid))
+        && get(grantPath(shareId, request.auth.uid)).data.uid == request.auth.uid
+        && get(grantPath(shareId, request.auth.uid)).data.shareId == shareId;
     }
 
     match /users/{uid} {
@@ -60,123 +44,148 @@ service cloud.firestore {
         && request.resource.data.visibility in ['public','private']
         && !request.resource.data.keys().hasAny([
           'passwordHash','reservationStatuses','reservationCount',
-          'passwordHolderUid','passwordHolderName','reservationProtectionActivated'
+          'passwordHolderUid','passwordHolderName','reservationProtectionActivated','reservationSalt'
         ]);
-
       allow read: if signedIn() && resource.data.ownerUid == request.auth.uid;
-
-      allow update: if signedIn()
+      allow update: if (signedIn()
         && resource.data.ownerUid == request.auth.uid
         && request.resource.data.ownerUid == resource.data.ownerUid
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
           'passwordHash','reservationStatuses','reservationCount',
-          'passwordHolderUid','passwordHolderName','reservationProtectionActivated',
+          'passwordHolderUid','passwordHolderName','reservationProtectionActivated','reservationSalt',
           'shareId','createdAt'
-        ]);
-
+        ])) || (signedIn()
+        && resource.data.visibility == 'public'
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.shareId == resource.data.shareId
+        && !resource.data.keys().hasAny(['reservationProtectionActivated','passwordHolderName','reservationSalt'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reservationProtectionActivated','passwordHolderName','reservationSalt'])
+        && request.resource.data.reservationProtectionActivated == true
+        && existsAfter(docPath('reservationSecrets/' + resource.data.shareId))
+        && getAfter(docPath('reservationSecrets/' + resource.data.shareId)).data.holderUid == request.auth.uid
+        && getAfter(docPath('reservationSecrets/' + resource.data.shareId)).data.holderName == request.resource.data.passwordHolderName
+        && getAfter(docPath('reservationSecrets/' + resource.data.shareId)).data.salt == request.resource.data.reservationSalt);
       allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
-
-      match /items/{itemId} {
-        allow read, write: if ownsList(listId);
-      }
+      match /items/{itemId} { allow read, write: if ownsList(listId); }
     }
 
-    // Hidden lookup mapping: clients cannot read this collection.
     match /publicWishlistIndex/{shareId} {
-      allow read: if ownsList(resource.data.listId);
-
+      allow read: if ownsList(resource.data.listId) || isPublicList(resource.data.listId, shareId);
       allow create: if signedIn()
         && request.resource.data.keys().hasOnly(['listId'])
         && request.resource.data.keys().hasAll(['listId'])
+        && existsAfter(docPath('lists/' + request.resource.data.listId))
         && ownsListAfter(request.resource.data.listId)
-        && isPublicListAfter(request.resource.data.listId, shareId);
-
-      allow update: if signedIn()
-        && ownsList(resource.data.listId)
+        && getAfter(docPath('lists/' + request.resource.data.listId)).data.visibility == 'public'
+        && getAfter(docPath('lists/' + request.resource.data.listId)).data.shareId == shareId;
+      allow update: if signedIn() && ownsList(resource.data.listId)
         && request.resource.data.listId == resource.data.listId
         && request.resource.data.keys().hasOnly(['listId']);
-
       allow delete: if ownsList(resource.data.listId);
     }
 
-    // Public mirror contains display fields only; no owner IDs or reservation details.
     match /publicWishlists/{shareId} {
       allow read: if isPublicShare(shareId);
-
       allow create: if signedIn()
-        && request.resource.data.keys().hasOnly([
-          'title','description','occasion','eventDate','passwordProtectionActive','mirrorVersion'
-        ])
-        && request.resource.data.keys().hasAll([
-          'title','description','occasion','eventDate','passwordProtectionActive','mirrorVersion'
-        ])
-        && existsAfter(/databases/$(database)/documents/publicWishlistIndex/$(shareId))
-        && ownsListAfter(getAfter(/databases/$(database)/documents/publicWishlistIndex/$(shareId)).data.listId)
-        && isPublicShareAfter(shareId);
-
-      allow update: if (
-        signedIn()
-        && isPublicShare(shareId)
-        && ownsList(indexedListId(shareId))
-        && request.resource.data.keys().hasOnly([
-          'title','description','occasion','eventDate','passwordProtectionActive','mirrorVersion'
-        ])
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'title','description','occasion','eventDate','passwordProtectionActive','mirrorVersion'
-        ])
-        && (
-          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['passwordProtectionActive'])
-          || (
-            request.resource.data.passwordProtectionActive == true
-            && exists(/databases/$(database)/documents/reservationSecrets/$(shareId))
-          )
-        )
-      ) || (
-        signedIn()
-        && isPublicShare(shareId)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['passwordProtectionActive'])
+        && request.resource.data.keys().hasOnly(['title','description','occasion','eventDate','passwordProtectionActive','mirrorVersion','reservationSalt'])
+        && request.resource.data.keys().hasAll(['title','description','occasion','eventDate','passwordProtectionActive','mirrorVersion'])
+        && existsAfter(docPath('publicWishlistIndex/' + shareId))
+        && ownsListAfter(getAfter(docPath('publicWishlistIndex/' + shareId)).data.listId)
+        && getAfter(docPath('lists/' + getAfter(docPath('publicWishlistIndex/' + shareId)).data.listId)).data.visibility == 'public'
+        && getAfter(docPath('lists/' + getAfter(docPath('publicWishlistIndex/' + shareId)).data.listId)).data.shareId == shareId;
+      allow update: if (signedIn() && isPublicShare(shareId) && ownsList(indexedListId(shareId))
+        && request.resource.data.keys().hasOnly(['title','description','occasion','eventDate','passwordProtectionActive','mirrorVersion','reservationSalt'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title','description','occasion','eventDate','passwordProtectionActive','mirrorVersion','reservationSalt']))
+        || (signedIn() && isPublicShare(shareId) && !isOwner(shareId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['passwordProtectionActive','reservationSalt'])
         && request.resource.data.passwordProtectionActive == true
-        && exists(/databases/$(database)/documents/reservationSecrets/$(shareId))
-      );
-
-      // Owners can remove a mirror when changing a list to private.
+        && existsAfter(docPath('reservationSecrets/' + shareId))
+        && getAfter(docPath('reservationSecrets/' + shareId)).data.holderUid == request.auth.uid
+        && request.resource.data.reservationSalt == getAfter(docPath('reservationSecrets/' + shareId)).data.salt);
       allow delete: if indexExists(shareId) && ownsList(indexedListId(shareId));
-
       match /items/{itemId} {
-        allow read: if (
-          isPublicShare(shareId)
-          && exists(/databases/$(database)/documents/publicWishlists/$(shareId))
-        ) || (
-          indexExists(shareId)
+        allow read: if isPublicShare(shareId);
+        allow create, update: if signedIn() && isPublicShare(shareId)
           && ownsList(indexedListId(shareId))
-        );
-
-        allow create, update: if signedIn()
-          && isPublicShare(shareId)
-          && ownsList(indexedListId(shareId))
-          && request.resource.data.keys().hasOnly([
-            'name','description','imageUrl','purchaseUrl','price'
-          ]);
-
+          && request.resource.data.keys().hasOnly(['name','description','imageUrl','purchaseUrl','price']);
         allow delete: if indexExists(shareId) && ownsList(indexedListId(shareId));
       }
     }
 
-    // Reservation secrets, access grants, and reservation records are server-only.
     match /reservationSecrets/{shareId} {
-      allow read, write: if false;
+      allow read: if false;
+      allow create: if signedIn() && isPublicShare(shareId) && !isOwner(shareId)
+        && !exists(docPath('reservationSecrets/' + shareId))
+        && request.resource.data.keys().hasOnly(['holderUid','holderName','salt','passwordHash','createdAt'])
+        && request.resource.data.holderUid == request.auth.uid
+        && request.resource.data.holderName is string
+        && request.resource.data.salt.matches('^[0-9a-f]{32}$')
+        && request.resource.data.passwordHash.matches('^[0-9a-f]{128}$')
+        && request.resource.data.createdAt == request.time
+        && existsAfter(grantPath(shareId, request.auth.uid))
+        && getAfter(grantPath(shareId, request.auth.uid)).data.uid == request.auth.uid
+        && getAfter(grantPath(shareId, request.auth.uid)).data.shareId == shareId
+        && getAfter(grantPath(shareId, request.auth.uid)).data.challengeId == 'password-holder';
+      allow update, delete: if false;
+    }
+
+    match /reservationChallenges/{challengeId} {
+      allow read: if false;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['shareId','uid','nonce','proof','consumed','createdAt'])
+        && request.resource.data.shareId is string
+        && request.resource.data.shareId.size() >= 30
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.nonce.matches('^[0-9a-f]{64}$')
+        && request.resource.data.proof.matches('^[0-9a-f]{64}$')
+        && request.resource.data.consumed == true
+        && request.resource.data.createdAt == request.time
+        && isPublicShare(request.resource.data.shareId)
+        && !isOwner(request.resource.data.shareId)
+        && exists(docPath('reservationSecrets/' + request.resource.data.shareId))
+        && request.resource.data.proof == hashing.sha256(
+          get(docPath('reservationSecrets/' + request.resource.data.shareId)).data.passwordHash + '|' +
+          request.resource.data.nonce + '|' + request.auth.uid + '|' +
+          request.resource.data.shareId + '|' + challengeId
+        ).toHexString()
+        && existsAfter(grantPath(request.resource.data.shareId, request.auth.uid))
+        && getAfter(grantPath(request.resource.data.shareId, request.auth.uid)).data.challengeId == challengeId;
+      allow update, delete: if false;
     }
 
     match /reservationAccess/{grantId} {
-      allow read, write: if false;
+      allow read: if signedIn() && resource.data.uid == request.auth.uid
+        && !isOwner(resource.data.shareId) && isPublicShare(resource.data.shareId);
+      allow create: if signedIn()
+        && request.resource.data.shareId is string
+        && grantId == request.resource.data.shareId + '_' + request.auth.uid
+        && request.resource.data.keys().hasOnly(['uid','shareId','challengeId','grantedAt'])
+        && request.resource.data.uid == request.auth.uid
+        && isPublicShare(request.resource.data.shareId)
+        && !isOwner(request.resource.data.shareId)
+        && request.resource.data.grantedAt == request.time
+        && ((request.resource.data.challengeId == 'password-holder'
+          && existsAfter(docPath('reservationSecrets/' + request.resource.data.shareId))
+          && getAfter(docPath('reservationSecrets/' + request.resource.data.shareId)).data.holderUid == request.auth.uid)
+          || (request.resource.data.challengeId is string
+          && existsAfter(docPath('reservationChallenges/' + request.resource.data.challengeId))
+          && getAfter(docPath('reservationChallenges/' + request.resource.data.challengeId)).data.shareId == request.resource.data.shareId
+          && getAfter(docPath('reservationChallenges/' + request.resource.data.challengeId)).data.uid == request.auth.uid
+          && getAfter(docPath('reservationChallenges/' + request.resource.data.challengeId)).data.consumed == true));
+      allow update, delete: if false;
     }
 
     match /reservations/{shareId}/items/{itemId} {
-      allow read, write: if false;
+      allow read: if hasGrant(shareId);
+      allow create: if hasGrant(shareId)
+        && exists(docPath('publicWishlists/' + shareId + '/items/' + itemId))
+        && request.resource.data.keys().hasOnly(['reservedBy','createdAt'])
+        && request.resource.data.reservedBy == request.auth.uid
+        && request.resource.data.createdAt == request.time;
+      allow update: if false;
+      allow delete: if hasGrant(shareId) && resource.data.reservedBy == request.auth.uid;
     }
 
-    match /{document=**} {
-      allow read, write: if false;
-    }
+    match /{document=**} { allow read, write: if false; }
   }
 }
