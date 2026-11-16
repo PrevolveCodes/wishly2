@@ -89,6 +89,16 @@ test("the first eligible viewer permanently claims the password and gets access"
   await assertFails(claimBatch("buyer","A Later Viewer"));
 });
 
+test("simultaneous first claims permanently select exactly one password holder",async()=>{
+  await seed();
+  const results=await Promise.allSettled([claimBatch("holder","First Viewer"),claimBatch("buyer","Gift Buyer")]);
+  assert.equal(results.filter(x=>x.status==="fulfilled").length,1);
+  await env.withSecurityRulesDisabled(async ctx=>{
+    const secret=await getDoc(doc(ctx.firestore(),"reservationSecrets",share));
+    assert.ok(["holder","buyer"].includes(secret.data().holderUid));
+  });
+});
+
 test("anonymous Firebase sessions cannot unlock reservations",async()=>{
   await seed({withSecret:true});
   await assertFails(unlockBatch("anon","anonymous-challenge",{token:{email:null}}));
