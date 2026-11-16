@@ -16,7 +16,8 @@ const safeUrl=value=>{
 const publicListData=data=>({
   title:String(data.title||""),description:String(data.description||""),
   occasion:String(data.occasion||""),eventDate:typeof data.eventDate==="string"?data.eventDate:null,
-  passwordProtectionActive:!!data.reservationProtectionActivated,mirrorVersion:1
+  passwordProtectionActive:!!data.reservationProtectionActivated,
+  reservationSalt:typeof data.reservationSalt==="string"?data.reservationSalt:null,mirrorVersion:1
 });
 const publicItemData=item=>({
   name:String(item.name||""),description:String(item.description||""),

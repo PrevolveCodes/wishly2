@@ -1,0 +1,15 @@
+{
+  "name": "wishly2-reservation-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:crypto": "node --test tests/crypto.test.js",
+    "test:emulator": "firebase emulators:exec --only firestore --project demo-wishly2 \"node --test tests/reservation.rules.test.js\""
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "4.0.1",
+    "@noble/hashes": "1.8.0",
+    "firebase": "11.6.0",
+    "firebase-tools": "14.22.0"
+  }
+}
