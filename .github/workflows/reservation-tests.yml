@@ -1,0 +1,17 @@
+name: Reservation security tests
+on:
+  push:
+    branches: [reservation-password-repair]
+  pull_request:
+    branches: [main]
+jobs:
+  emulator:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - run: npm run test:crypto
+      - run: npm run test:emulator
