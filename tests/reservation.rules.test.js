@@ -349,21 +349,29 @@ test("a valid challenge-specific proof creates one access grant", async () => {
 });
 
 test("a captured proof cannot be reused with another UID, share, nonce, or challenge ID", async () => {
-  await seed({withSecret: true});
   const captured = proofFor("buyer", "original-challenge");
 
+  await seed({withSecret: true});
   await assertSucceeds(unlockBatch("buyer", "original-challenge", {proof: captured}));
+  await assertFails(unlockBatch("buyer", "original-challenge", {proof: captured}));
+
+  await seed({withSecret: true});
   await assertFails(unlockBatch("buyer2", "replay-as-other-uid", {proof: captured}));
+
+  await seed({withSecret: true});
   await assertFails(unlockBatch("buyer", "replay-new-challenge", {proof: captured}));
+
+  await seed({withSecret: true});
   await assertFails(unlockBatch("buyer", "replay-altered-nonce", {
     proof: captured,
     nonce: "f".repeat(64)
   }));
+
+  await seed({withSecret: true});
   await assertFails(unlockBatch("buyer", "replay-on-other-share", {
     shareId: share2,
     proof: captured
   }));
-  await assertFails(unlockBatch("buyer", "original-challenge", {proof: captured}));
 });
 
 test("challenge and grant creation must be one atomic batch; challenges are create-only", async () => {
