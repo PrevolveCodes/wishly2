@@ -156,7 +156,7 @@ test("the actual wishlist owner cannot unlock or read reservation records",async
 test("only the reservation owner can cancel; competing reservations cannot overwrite",async()=>{
   await seed({withSecret:true});
   await assertSucceeds(unlockBatch("buyer","buyer-access"));
-  const buyer=env.authenticatedContext("buyer").firestore();
+  const buyer=env.authenticatedContext("buyer",{email:"buyer@example.test"}).firestore();
   const other=env.authenticatedContext("other",{email:"other@example.test"}).firestore();
   await assertFails(deleteDoc(doc(other,"reservations",share,"items","gift1")));
   await assertFails(setDoc(doc(buyer,"reservations",share,"items","gift1"),{reservedBy:"buyer",createdAt:serverTimestamp()}));
