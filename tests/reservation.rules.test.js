@@ -53,15 +53,6 @@ async function unlockBatch(uid,challengeId,options={}){
   return batch.commit();
 }
 
-test("diagnostic: Wishly profile rule and SHA-256 hashing work",async()=>{
-  await seed({withSecret:true});
-  const db=env.authenticatedContext("buyer",{email:"buyer@example.test"}).firestore();
-  await assertSucceeds(setDoc(doc(db,"accountProbe","buyer"),{ok:true}));
-  const input="verifier|nonce|buyer|"+share+"|diag";
-  const digest=createHash("sha256").update(input).digest("hex").toUpperCase();
-  await assertSucceeds(setDoc(doc(db,"hashProbe","known"),{input,proof:digest}));
-});
-
 test("public browsing works without authentication; private data does not",async()=>{
   await seed();
   const anon=env.unauthenticatedContext().firestore();
