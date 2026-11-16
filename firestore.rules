@@ -38,7 +38,7 @@ service cloud.firestore {
         && get(listPath(indexedListId(shareId))).data.ownerUid == request.auth.uid;
     }
     function hasGrant(shareId) {
-      return hasWishlyAccount() && !isOwner(shareId)
+      return hasWishlyAccount() && isPublicShare(shareId) && !isOwner(shareId)
         && exists(grantPath(shareId, request.auth.uid))
         && get(grantPath(shareId, request.auth.uid)).data.uid == request.auth.uid
         && get(grantPath(shareId, request.auth.uid)).data.shareId == shareId;
