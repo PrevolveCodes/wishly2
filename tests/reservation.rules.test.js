@@ -29,7 +29,6 @@ async function seed({withSecret=false}={}){
     await setDoc(doc(db,"users/buyer"),{displayName:"Gift Buyer",email:"buyer@example.test"});
     await setDoc(doc(db,"users/buyer2"),{displayName:"Second Buyer",email:"buyer2@example.test"});
     await setDoc(doc(db,"users/other"),{displayName:"Other Buyer",email:"other@example.test"});
-    await setDoc(doc(db,"users/anon"),{displayName:"Anonymous Session",email:"anon@example.test"});
     if(withSecret)await setDoc(doc(db,"reservationSecrets",share),{holderUid:"holder",holderName:"First Viewer",salt,passwordHash,createdAt:Timestamp.now()});
     await setDoc(doc(db,"reservations",share,"items","gift1"),{reservedBy:"buyer",createdAt:Timestamp.now()});
   });
