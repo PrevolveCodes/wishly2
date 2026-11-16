@@ -26,6 +26,7 @@ async function seed({withSecret=false}={}){
     await setDoc(doc(db,"publicWishlists",share),{title:"Test list",description:"",occasion:"",eventDate:null,passwordProtectionActive:withSecret,mirrorVersion:1,reservationSalt:withSecret?salt:null});
     await setDoc(doc(db,"publicWishlists",share,"items","gift1"),{name:"Gift",description:"",imageUrl:"",purchaseUrl:"",price:null});
     await setDoc(doc(db,"users/holder"),{displayName:"First Viewer",email:"holder@example.test"});
+    await setDoc(doc(db,"users/owner"),{displayName:"List Owner",email:"owner@example.test"});
     await setDoc(doc(db,"users/buyer"),{displayName:"Gift Buyer",email:"buyer@example.test"});
     await setDoc(doc(db,"users/buyer2"),{displayName:"Second Buyer",email:"buyer2@example.test"});
     await setDoc(doc(db,"users/other"),{displayName:"Other Buyer",email:"other@example.test"});
