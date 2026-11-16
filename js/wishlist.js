@@ -20,7 +20,7 @@ async function deriveVerifier(password,salt){
   return hex(await scryptAsync(bytes(password),bytes(salt),SCRYPT));
 }
 async function makeProof(verifier,nonce,uid,shareId,challengeId){
-  return hex(await crypto.subtle.digest("SHA-256",bytes(`${verifier}|${nonce}|${uid}|${shareId}|${challengeId}`)));
+  return hex(await crypto.subtle.digest("SHA-256",bytes(`${verifier}|${nonce}|${uid}|${shareId}|${challengeId}`))).toUpperCase();
 }
 const grantRef=uid=>doc(db,"reservationAccess",`${share}_${uid}`);
 
