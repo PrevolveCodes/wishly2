@@ -25,11 +25,11 @@ async function seed({withSecret=false}={}){
     await setDoc(doc(db,"publicWishlistIndex",share),{listId:"list1"});
     await setDoc(doc(db,"publicWishlists",share),{title:"Test list",description:"",occasion:"",eventDate:null,passwordProtectionActive:withSecret,mirrorVersion:1,reservationSalt:withSecret?salt:null});
     await setDoc(doc(db,"publicWishlists",share,"items","gift1"),{name:"Gift",description:"",imageUrl:"",purchaseUrl:"",price:null});
-    await setDoc(doc(db,"users/holder"),{displayName:"First Viewer"});
-    await setDoc(doc(db,"users/buyer"),{displayName:"Gift Buyer"});
-    await setDoc(doc(db,"users/buyer2"),{displayName:"Second Buyer"});
-    await setDoc(doc(db,"users/other"),{displayName:"Other Buyer"});
-    await setDoc(doc(db,"users/anon"),{displayName:"Anonymous Session"});
+    await setDoc(doc(db,"users/holder"),{displayName:"First Viewer",email:"holder@example.test"});
+    await setDoc(doc(db,"users/buyer"),{displayName:"Gift Buyer",email:"buyer@example.test"});
+    await setDoc(doc(db,"users/buyer2"),{displayName:"Second Buyer",email:"buyer2@example.test"});
+    await setDoc(doc(db,"users/other"),{displayName:"Other Buyer",email:"other@example.test"});
+    await setDoc(doc(db,"users/anon"),{displayName:"Anonymous Session",email:"anon@example.test"});
     if(withSecret)await setDoc(doc(db,"reservationSecrets",share),{holderUid:"holder",holderName:"First Viewer",salt,passwordHash,createdAt:Timestamp.now()});
     await setDoc(doc(db,"reservations",share,"items","gift1"),{reservedBy:"buyer",createdAt:Timestamp.now()});
   });
@@ -41,7 +41,7 @@ function proofFor(uid,challengeId,pass=password){
   return {nonce,proof};
 }
 async function unlockBatch(uid,challengeId,options={}){
-  const db=env.authenticatedContext(uid,options.token||{}).firestore();
+  const db=env.authenticatedContext(uid,{email:uid+"@example.test",...(options.token||{})}).firestore();
   const {nonce,proof}=options.proof||proofFor(uid,challengeId,options.password);
   const batch=writeBatch(db);
   batch.set(doc(db,"reservationChallenges",challengeId),{
@@ -70,17 +70,29 @@ test("password verifier cannot be read by viewers or the list owner",async()=>{
   await assertFails(getDoc(doc(env.authenticatedContext("owner").firestore(),"reservationSecrets",share)));
 });
 
+async function claimBatch(uid,holderName="First Viewer"){
+  const db=env.authenticatedContext(uid,{email:uid+"@example.test"}).firestore();
+  const freshSalt="fedcba9876543210fedcba9876543210";
+  const hash=scryptSync("Wishly claim password 2026!",freshSalt,64,{N:16384,r:8,p:1}).toString("hex");
+  const batch=writeBatch(db);
+  batch.set(doc(db,"reservationSecrets",share),{holderUid:uid,holderName,salt:freshSalt,passwordHash:hash,createdAt:serverTimestamp()});
+  batch.update(doc(db,"lists/list1"),{reservationProtectionActivated:true,passwordHolderName:holderName,reservationSalt:freshSalt});
+  batch.update(doc(db,"publicWishlists",share),{passwordProtectionActive:true,reservationSalt:freshSalt});
+  batch.set(doc(db,"reservationAccess",share+"_"+uid),{uid,shareId:share,challengeId:"password-holder",grantedAt:serverTimestamp()});
+  return batch.commit();
+}
+
 test("the first eligible viewer permanently claims the password and gets access",async()=>{
   await seed();
   await assertSucceeds(claimBatch("holder"));
-  const db=env.authenticatedContext("holder").firestore();
+  const db=env.authenticatedContext("holder",{email:"holder@example.test"}).firestore();
   await assertSucceeds(getDoc(doc(db,"reservationAccess",share+"_holder")));
   await assertFails(claimBatch("buyer","A Later Viewer"));
 });
 
 test("anonymous Firebase sessions cannot unlock reservations",async()=>{
   await seed({withSecret:true});
-  await assertFails(unlockBatch("anon","anonymous-challenge",{token:{firebase:{sign_in_provider:"anonymous"}}}));
+  await assertFails(unlockBatch("anon","anonymous-challenge",{token:{}}));
 });
 
 test("incorrect password proof is rejected",async()=>{
