@@ -122,6 +122,16 @@ test("expired challenge timestamps are rejected",async()=>{
   await assertFails(unlockBatch("buyer","expired-challenge",{createdAt:old}));
 });
 
+test("reservation access stops working when the wishlist becomes private",async()=>{
+  await seed({withSecret:true});
+  await assertSucceeds(unlockBatch("buyer","private-after-unlock"));
+  await env.withSecurityRulesDisabled(async ctx=>{
+    await setDoc(doc(ctx.firestore(),"lists/list1"),{ownerUid:"owner",shareId:share,visibility:"private",title:"Test list"});
+  });
+  const buyer=env.authenticatedContext("buyer",{email:"buyer@example.test"}).firestore();
+  await assertFails(getDocs(collection(buyer,"reservations",share,"items")));
+});
+
 test("the actual wishlist owner cannot unlock or read reservation records",async()=>{
   await seed({withSecret:true});
   await assertFails(unlockBatch("owner","owner-challenge"));
