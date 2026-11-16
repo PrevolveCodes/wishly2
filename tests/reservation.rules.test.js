@@ -26,6 +26,10 @@ async function seed({withSecret=false}={}){
     await setDoc(doc(db,"publicWishlists",share),{title:"Test list",description:"",occasion:"",eventDate:null,passwordProtectionActive:withSecret,mirrorVersion:1,reservationSalt:withSecret?salt:null});
     await setDoc(doc(db,"publicWishlists",share,"items","gift1"),{name:"Gift",description:"",imageUrl:"",purchaseUrl:"",price:null});
     await setDoc(doc(db,"users/holder"),{displayName:"First Viewer"});
+    await setDoc(doc(db,"users/buyer"),{displayName:"Gift Buyer"});
+    await setDoc(doc(db,"users/buyer2"),{displayName:"Second Buyer"});
+    await setDoc(doc(db,"users/other"),{displayName:"Other Buyer"});
+    await setDoc(doc(db,"users/anon"),{displayName:"Anonymous Session"});
     if(withSecret)await setDoc(doc(db,"reservationSecrets",share),{holderUid:"holder",holderName:"First Viewer",salt,passwordHash,createdAt:Timestamp.now()});
     await setDoc(doc(db,"reservations",share,"items","gift1"),{reservedBy:"buyer",createdAt:Timestamp.now()});
   });
@@ -37,7 +41,7 @@ function proofFor(uid,challengeId,pass=password){
   return {nonce,proof};
 }
 async function unlockBatch(uid,challengeId,options={}){
-  const db=env.authenticatedContext(uid).firestore();
+  const db=env.authenticatedContext(uid,options.token||{}).firestore();
   const {nonce,proof}=options.proof||proofFor(uid,challengeId,options.password);
   const batch=writeBatch(db);
   batch.set(doc(db,"reservationChallenges",challengeId),{
@@ -64,6 +68,19 @@ test("password verifier cannot be read by viewers or the list owner",async()=>{
   await seed({withSecret:true});
   await assertFails(getDoc(doc(env.authenticatedContext("buyer").firestore(),"reservationSecrets",share)));
   await assertFails(getDoc(doc(env.authenticatedContext("owner").firestore(),"reservationSecrets",share)));
+});
+
+test("the first eligible viewer permanently claims the password and gets access",async()=>{
+  await seed();
+  await assertSucceeds(claimBatch("holder"));
+  const db=env.authenticatedContext("holder").firestore();
+  await assertSucceeds(getDoc(doc(db,"reservationAccess",share+"_holder")));
+  await assertFails(claimBatch("buyer","A Later Viewer"));
+});
+
+test("anonymous Firebase sessions cannot unlock reservations",async()=>{
+  await seed({withSecret:true});
+  await assertFails(unlockBatch("anon","anonymous-challenge",{token:{firebase:{sign_in_provider:"anonymous"}}}));
 });
 
 test("incorrect password proof is rejected",async()=>{
