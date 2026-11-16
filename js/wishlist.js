@@ -86,8 +86,6 @@ async function claimPassword(password){
   const indexSnap=await getDoc(doc(db,"publicWishlistIndex",share));
   if(!indexSnap.exists())throw new Error("This public wishlist could not be found.");
   const listRef=doc(db,"lists",indexSnap.data().listId);
-  const listSnap=await getDoc(listRef);
-  if(!listSnap.exists()||listSnap.data().visibility!=="public"||listSnap.data().ownerUid===user.uid)throw new Error("The list creator cannot create the reservation password.");
   const userSnap=await getDoc(doc(db,"users",user.uid));
   const holderName=String(userSnap.data()?.displayName||user.displayName||"Wishly viewer").slice(0,100);
   const salt=randomHex(16);
@@ -102,10 +100,6 @@ async function claimPassword(password){
 
 async function unlockPassword(password){
   if(typeof password!=="string"||password.length<1)throw new Error("Enter the reservation password.");
-  const indexSnap=await getDoc(doc(db,"publicWishlistIndex",share));
-  if(!indexSnap.exists())throw new Error("This public wishlist could not be found.");
-  const listSnap=await getDoc(doc(db,"lists",indexSnap.data().listId));
-  if(!listSnap.exists()||listSnap.data().ownerUid===user.uid)throw new Error("The list creator cannot unlock reservation details.");
   const publicSnap=await getDoc(doc(db,"publicWishlists",share));
   const salt=publicSnap.data()?.reservationSalt;
   if(typeof salt!=="string"||! /^[0-9a-f]{32}$/.test(salt))throw new Error("Reservation password setup is incomplete. Ask the password holder to reload and try again.");
