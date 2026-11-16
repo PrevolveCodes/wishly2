@@ -36,7 +36,7 @@ async function seed({withSecret=false}={}){
 function proofFor(uid,challengeId,pass=password){
   const verifier=scryptSync(pass,salt,64,{N:16384,r:8,p:1}).toString("hex");
   const nonce=randomBytes(32).toString("hex");
-  const proof=createHash("sha256").update(verifier+"|"+nonce+"|"+uid+"|"+share+"|"+challengeId).digest("hex");
+  const proof=createHash("sha256").update(verifier+"|"+nonce+"|"+uid+"|"+share+"|"+challengeId).digest("hex").toUpperCase();
   return {nonce,proof};
 }
 async function unlockBatch(uid,challengeId,options={}){
@@ -58,7 +58,7 @@ test("diagnostic: Wishly profile rule and SHA-256 hashing work",async()=>{
   const db=env.authenticatedContext("buyer",{email:"buyer@example.test"}).firestore();
   await assertSucceeds(setDoc(doc(db,"accountProbe","buyer"),{ok:true}));
   const input="verifier|nonce|buyer|"+share+"|diag";
-  const digest=createHash("sha256").update(input).digest("hex");
+  const digest=createHash("sha256").update(input).digest("hex").toUpperCase();
   await assertSucceeds(setDoc(doc(db,"hashProbe","known"),{input,proof:digest}));
 });
 
