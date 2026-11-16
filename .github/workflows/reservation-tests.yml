@@ -3,6 +3,7 @@ name: Reservation security tests
 on:
   push:
     branches:
+      - main
       - test/emulator-suite
       - reservation-password-repair
   pull_request:
