@@ -4,7 +4,7 @@ service cloud.firestore {
     function signedIn() { return request.auth != null; }
     function userPath(uid) { return /databases/$(database)/documents/users/$(uid); }
     function hasWishlyAccount() {
-      return signedIn() && exists(userPath(request.auth.uid));
+      return signedIn() && request.auth.token.email is string && exists(userPath(request.auth.uid));
     }
     function listPath(id) { return /databases/$(database)/documents/lists/$(id); }
     function indexPath(id) { return /databases/$(database)/documents/publicWishlistIndex/$(id); }
