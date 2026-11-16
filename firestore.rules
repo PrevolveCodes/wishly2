@@ -4,7 +4,8 @@ service cloud.firestore {
     function signedIn() { return request.auth != null; }
     function userPath(uid) { return /databases/$(database)/documents/users/$(uid); }
     function hasWishlyAccount() {
-      return signedIn() && request.auth.token.email is string && exists(userPath(request.auth.uid));
+      return signedIn() && request.auth.token.email is string
+        && exists(userPath(request.auth.uid));
     }
     function listPath(id) { return /databases/$(database)/documents/lists/$(id); }
     function indexPath(id) { return /databases/$(database)/documents/publicWishlistIndex/$(id); }
@@ -57,14 +58,17 @@ service cloud.firestore {
           'passwordHolderUid','passwordHolderName','reservationProtectionActivated','reservationSalt'
         ]);
       allow read: if signedIn() && resource.data.ownerUid == request.auth.uid;
-      allow update: if (signedIn()
+      allow update: if (
+        signedIn()
         && resource.data.ownerUid == request.auth.uid
         && request.resource.data.ownerUid == resource.data.ownerUid
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
           'passwordHash','reservationStatuses','reservationCount',
           'passwordHolderUid','passwordHolderName','reservationProtectionActivated','reservationSalt',
           'shareId','createdAt'
-        ])) || (signedIn()
+        ])
+      ) || (
+        hasWishlyAccount()
         && resource.data.visibility == 'public'
         && request.resource.data.ownerUid == resource.data.ownerUid
         && request.resource.data.shareId == resource.data.shareId
@@ -74,7 +78,8 @@ service cloud.firestore {
         && existsAfter(secretPath(resource.data.shareId))
         && getAfter(secretPath(resource.data.shareId)).data.holderUid == request.auth.uid
         && getAfter(secretPath(resource.data.shareId)).data.holderName == request.resource.data.passwordHolderName
-        && getAfter(secretPath(resource.data.shareId)).data.salt == request.resource.data.reservationSalt);
+        && getAfter(secretPath(resource.data.shareId)).data.salt == request.resource.data.reservationSalt
+      );
       allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
       match /items/{itemId} { allow read, write: if ownsList(listId); }
     }
@@ -103,15 +108,18 @@ service cloud.firestore {
         && ownsListAfter(getAfter(indexPath(shareId)).data.listId)
         && getAfter(listPath(getAfter(indexPath(shareId)).data.listId)).data.visibility == 'public'
         && getAfter(listPath(getAfter(indexPath(shareId)).data.listId)).data.shareId == shareId;
-      allow update: if (signedIn() && isPublicShare(shareId) && ownsList(indexedListId(shareId))
+      allow update: if (
+        signedIn() && isPublicShare(shareId) && ownsList(indexedListId(shareId))
         && request.resource.data.keys().hasOnly(['title','description','occasion','eventDate','passwordProtectionActive','mirrorVersion','reservationSalt'])
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title','description','occasion','eventDate','passwordProtectionActive','mirrorVersion','reservationSalt']))
-        || (signedIn() && isPublicShare(shareId) && !isOwner(shareId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title','description','occasion','eventDate','passwordProtectionActive','mirrorVersion','reservationSalt'])
+      ) || (
+        hasWishlyAccount() && isPublicShare(shareId) && !isOwner(shareId)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['passwordProtectionActive','reservationSalt'])
         && request.resource.data.passwordProtectionActive == true
         && existsAfter(secretPath(shareId))
         && getAfter(secretPath(shareId)).data.holderUid == request.auth.uid
-        && request.resource.data.reservationSalt == getAfter(secretPath(shareId)).data.salt);
+        && request.resource.data.reservationSalt == getAfter(secretPath(shareId)).data.salt
+      );
       allow delete: if indexExists(shareId) && ownsList(indexedListId(shareId));
       match /items/{itemId} {
         allow read: if isPublicShare(shareId);
@@ -147,7 +155,7 @@ service cloud.firestore {
         && request.resource.data.shareId.size() >= 30
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.nonce.matches('^[0-9a-f]{64}$')
-        && request.resource.data.proof.matches('^[0-9A-F]{64}
+        && request.resource.data.proof.matches('^[0-9A-F]{64}$')
         && request.resource.data.consumed == true
         && request.resource.data.createdAt == request.time
         && isPublicShare(request.resource.data.shareId)
@@ -174,14 +182,16 @@ service cloud.firestore {
         && isPublicShare(request.resource.data.shareId)
         && !isOwner(request.resource.data.shareId)
         && request.resource.data.grantedAt == request.time
-        && ((request.resource.data.challengeId == 'password-holder'
-          && existsAfter(secretPath(request.resource.data.shareId))
-          && getAfter(secretPath(request.resource.data.shareId)).data.holderUid == request.auth.uid)
+        && (
+          (request.resource.data.challengeId == 'password-holder'
+            && existsAfter(secretPath(request.resource.data.shareId))
+            && getAfter(secretPath(request.resource.data.shareId)).data.holderUid == request.auth.uid)
           || (request.resource.data.challengeId is string
-          && existsAfter(challengePath(request.resource.data.challengeId))
-          && getAfter(challengePath(request.resource.data.challengeId)).data.shareId == request.resource.data.shareId
-          && getAfter(challengePath(request.resource.data.challengeId)).data.uid == request.auth.uid
-          && getAfter(challengePath(request.resource.data.challengeId)).data.consumed == true));
+            && existsAfter(challengePath(request.resource.data.challengeId))
+            && getAfter(challengePath(request.resource.data.challengeId)).data.shareId == request.resource.data.shareId
+            && getAfter(challengePath(request.resource.data.challengeId)).data.uid == request.auth.uid
+            && getAfter(challengePath(request.resource.data.challengeId)).data.consumed == true)
+        );
       allow update, delete: if false;
     }
 
@@ -196,63 +206,6 @@ service cloud.firestore {
       allow delete: if hasGrant(shareId) && resource.data.reservedBy == request.auth.uid;
     }
 
-    match /{document=**} { allow read, write: if false; }
-  }
-})
-        && request.resource.data.consumed == true
-        && request.resource.data.createdAt == request.time
-        && isPublicShare(request.resource.data.shareId)
-        && !isOwner(request.resource.data.shareId)
-        && exists(secretPath(request.resource.data.shareId))
-        && request.resource.data.proof == hashing.sha256(
-          get(secretPath(request.resource.data.shareId)).data.passwordHash + '|' +
-          request.resource.data.nonce + '|' + request.auth.uid + '|' +
-          request.resource.data.shareId + '|' + challengeId
-        ).toHexString()
-        && existsAfter(grantPath(request.resource.data.shareId, request.auth.uid))
-        && getAfter(grantPath(request.resource.data.shareId, request.auth.uid)).data.challengeId == challengeId;
-      allow update, delete: if false;
-    }
-
-    match /reservationAccess/{grantId} {
-      allow read: if hasWishlyAccount() && resource.data.uid == request.auth.uid
-        && !isOwner(resource.data.shareId) && isPublicShare(resource.data.shareId);
-      allow create: if hasWishlyAccount()
-        && request.resource.data.shareId is string
-        && grantId == request.resource.data.shareId + '_' + request.auth.uid
-        && request.resource.data.keys().hasOnly(['uid','shareId','challengeId','grantedAt'])
-        && request.resource.data.uid == request.auth.uid
-        && isPublicShare(request.resource.data.shareId)
-        && !isOwner(request.resource.data.shareId)
-        && request.resource.data.grantedAt == request.time
-        && ((request.resource.data.challengeId == 'password-holder'
-          && existsAfter(secretPath(request.resource.data.shareId))
-          && getAfter(secretPath(request.resource.data.shareId)).data.holderUid == request.auth.uid)
-          || (request.resource.data.challengeId is string
-          && existsAfter(challengePath(request.resource.data.challengeId))
-          && getAfter(challengePath(request.resource.data.challengeId)).data.shareId == request.resource.data.shareId
-          && getAfter(challengePath(request.resource.data.challengeId)).data.uid == request.auth.uid
-          && getAfter(challengePath(request.resource.data.challengeId)).data.consumed == true));
-      allow update, delete: if false;
-    }
-
-    match /reservations/{shareId}/items/{itemId} {
-      allow read: if hasGrant(shareId);
-      allow create: if hasGrant(shareId)
-        && exists(publicItemPath(shareId, itemId))
-        && request.resource.data.keys().hasOnly(['reservedBy','createdAt'])
-        && request.resource.data.reservedBy == request.auth.uid
-        && request.resource.data.createdAt == request.time;
-      allow update: if false;
-      allow delete: if hasGrant(shareId) && resource.data.reservedBy == request.auth.uid;
-    }
-
-    match /accountProbe/{id} {
-      allow create: if hasWishlyAccount();
-    }
-    match /hashProbe/{id} {
-      allow create: if request.resource.data.proof == hashing.sha256(request.resource.data.input).toHexString();
-    }
     match /{document=**} { allow read, write: if false; }
   }
 }
