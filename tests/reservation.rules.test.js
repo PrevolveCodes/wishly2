@@ -92,7 +92,7 @@ test("the first eligible viewer permanently claims the password and gets access"
 
 test("anonymous Firebase sessions cannot unlock reservations",async()=>{
   await seed({withSecret:true});
-  await assertFails(unlockBatch("anon","anonymous-challenge",{token:{}}));
+  await assertFails(unlockBatch("anon","anonymous-challenge",{token:{email:null}}));
 });
 
 test("incorrect password proof is rejected",async()=>{
