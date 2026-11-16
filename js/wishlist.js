@@ -91,10 +91,10 @@ async function claimPassword(password){
   const salt=randomHex(16);
   const passwordHash=await deriveVerifier(password,salt);
   const batch=writeBatch(db);
-  batch.create(doc(db,"reservationSecrets",share),{holderUid:user.uid,holderName,salt,passwordHash,createdAt:serverTimestamp()});
+  batch.set(doc(db,"reservationSecrets",share),{holderUid:user.uid,holderName,salt,passwordHash,createdAt:serverTimestamp()});
   batch.update(listRef,{reservationProtectionActivated:true,passwordHolderName:holderName,reservationSalt:salt});
   batch.update(doc(db,"publicWishlists",share),{passwordProtectionActive:true,reservationSalt:salt});
-  batch.create(grantRef(user.uid),{uid:user.uid,shareId:share,challengeId:"password-holder",grantedAt:serverTimestamp()});
+  batch.set(grantRef(user.uid),{uid:user.uid,shareId:share,challengeId:"password-holder",grantedAt:serverTimestamp()});
   await batch.commit();
 }
 
@@ -108,8 +108,8 @@ async function unlockPassword(password){
   const nonce=randomHex(32);
   const proof=await makeProof(verifier,nonce,user.uid,share,challengeRef.id);
   const batch=writeBatch(db);
-  batch.create(challengeRef,{shareId:share,uid:user.uid,nonce,proof,consumed:true,createdAt:serverTimestamp()});
-  batch.create(grantRef(user.uid),{uid:user.uid,shareId:share,challengeId:challengeRef.id,grantedAt:serverTimestamp()});
+  batch.set(challengeRef,{shareId:share,uid:user.uid,nonce,proof,consumed:true,createdAt:serverTimestamp()});
+  batch.set(grantRef(user.uid),{uid:user.uid,shareId:share,challengeId:challengeRef.id,grantedAt:serverTimestamp()});
   await batch.commit();
 }
 
