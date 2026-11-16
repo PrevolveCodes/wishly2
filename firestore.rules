@@ -147,7 +147,64 @@ service cloud.firestore {
         && request.resource.data.shareId.size() >= 30
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.nonce.matches('^[0-9a-f]{64}$')
-        && request.resource.data.proof.matches('^[0-9a-f]{64}$')
+        && request.resource.data.proof.matches('^[0-9A-F]{64}
+        && request.resource.data.consumed == true
+        && request.resource.data.createdAt == request.time
+        && isPublicShare(request.resource.data.shareId)
+        && !isOwner(request.resource.data.shareId)
+        && exists(secretPath(request.resource.data.shareId))
+        && request.resource.data.proof == hashing.sha256(
+          get(secretPath(request.resource.data.shareId)).data.passwordHash + '|' +
+          request.resource.data.nonce + '|' + request.auth.uid + '|' +
+          request.resource.data.shareId + '|' + challengeId
+        ).toHexString()
+        && existsAfter(grantPath(request.resource.data.shareId, request.auth.uid))
+        && getAfter(grantPath(request.resource.data.shareId, request.auth.uid)).data.challengeId == challengeId;
+      allow update, delete: if false;
+    }
+
+    match /reservationAccess/{grantId} {
+      allow read: if hasWishlyAccount() && resource.data.uid == request.auth.uid
+        && !isOwner(resource.data.shareId) && isPublicShare(resource.data.shareId);
+      allow create: if hasWishlyAccount()
+        && request.resource.data.shareId is string
+        && grantId == request.resource.data.shareId + '_' + request.auth.uid
+        && request.resource.data.keys().hasOnly(['uid','shareId','challengeId','grantedAt'])
+        && request.resource.data.uid == request.auth.uid
+        && isPublicShare(request.resource.data.shareId)
+        && !isOwner(request.resource.data.shareId)
+        && request.resource.data.grantedAt == request.time
+        && ((request.resource.data.challengeId == 'password-holder'
+          && existsAfter(secretPath(request.resource.data.shareId))
+          && getAfter(secretPath(request.resource.data.shareId)).data.holderUid == request.auth.uid)
+          || (request.resource.data.challengeId is string
+          && existsAfter(challengePath(request.resource.data.challengeId))
+          && getAfter(challengePath(request.resource.data.challengeId)).data.shareId == request.resource.data.shareId
+          && getAfter(challengePath(request.resource.data.challengeId)).data.uid == request.auth.uid
+          && getAfter(challengePath(request.resource.data.challengeId)).data.consumed == true));
+      allow update, delete: if false;
+    }
+
+    match /reservations/{shareId}/items/{itemId} {
+      allow read: if hasGrant(shareId);
+      allow create: if hasGrant(shareId)
+        && exists(publicItemPath(shareId, itemId))
+        && request.resource.data.keys().hasOnly(['reservedBy','createdAt'])
+        && request.resource.data.reservedBy == request.auth.uid
+        && request.resource.data.createdAt == request.time;
+      allow update: if false;
+      allow delete: if hasGrant(shareId) && resource.data.reservedBy == request.auth.uid;
+    }
+
+    match /accountProbe/{id} {
+      allow create: if hasWishlyAccount();
+    }
+    match /hashProbe/{id} {
+      allow create: if request.resource.data.proof == hashing.sha256(request.resource.data.input).toHexString();
+    }
+    match /{document=**} { allow read, write: if false; }
+  }
+})
         && request.resource.data.consumed == true
         && request.resource.data.createdAt == request.time
         && isPublicShare(request.resource.data.shareId)
