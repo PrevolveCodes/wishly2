@@ -102,7 +102,7 @@ test("incorrect password proof is rejected",async()=>{
 test("a valid one-time proof creates one access grant",async()=>{
   await seed({withSecret:true});
   await assertSucceeds(unlockBatch("buyer","valid-challenge"));
-  const buyer=env.authenticatedContext("buyer").firestore();
+  const buyer=env.authenticatedContext("buyer",{email:"buyer@example.test"}).firestore();
   await assertSucceeds(getDoc(doc(buyer,"reservationAccess",share+"_buyer")));
   await assertSucceeds(getDocs(collection(buyer,"reservations",share,"items")));
 });
@@ -125,7 +125,7 @@ test("expired challenge timestamps are rejected",async()=>{
 test("the actual wishlist owner cannot unlock or read reservation records",async()=>{
   await seed({withSecret:true});
   await assertFails(unlockBatch("owner","owner-challenge"));
-  const owner=env.authenticatedContext("owner").firestore();
+  const owner=env.authenticatedContext("owner",{email:"owner@example.test"}).firestore();
   await assertFails(getDocs(collection(owner,"reservations",share,"items")));
 });
 
@@ -133,7 +133,7 @@ test("only the reservation owner can cancel; competing reservations cannot overw
   await seed({withSecret:true});
   await assertSucceeds(unlockBatch("buyer","buyer-access"));
   const buyer=env.authenticatedContext("buyer").firestore();
-  const other=env.authenticatedContext("other").firestore();
+  const other=env.authenticatedContext("other",{email:"other@example.test"}).firestore();
   await assertFails(deleteDoc(doc(other,"reservations",share,"items","gift1")));
   await assertFails(setDoc(doc(buyer,"reservations",share,"items","gift1"),{reservedBy:"buyer",createdAt:serverTimestamp()}));
   await assertSucceeds(deleteDoc(doc(buyer,"reservations",share,"items","gift1")));
@@ -146,6 +146,6 @@ test("simultaneous unlock attempts for one UID produce only one grant",async()=>
     unlockBatch("buyer","simultaneous-b")
   ]);
   assert.equal(outcomes.filter(x=>x.status==="fulfilled").length,1);
-  const db=env.authenticatedContext("buyer").firestore();
+  const db=env.authenticatedContext("buyer",{email:"buyer@example.test"}).firestore();
   await assertSucceeds(getDoc(doc(db,"reservationAccess",share+"_buyer")));
 });
