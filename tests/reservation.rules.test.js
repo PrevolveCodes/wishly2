@@ -22,6 +22,9 @@ async function seed({withSecret=false}={}){
   await env.withSecurityRulesDisabled(async ctx=>{
     const db=ctx.firestore();
     await setDoc(doc(db,"lists/list1"),{ownerUid:"owner",shareId:share,visibility:"public",title:"Test list"});
+    await setDoc(doc(db,"lists/privateList"),{ownerUid:"owner",shareId:"private_share_012345678901234567890",visibility:"private",title:"Private list"});
+    await setDoc(doc(db,"publicWishlistIndex/private_share_012345678901234567890"),{listId:"privateList"});
+    await setDoc(doc(db,"publicWishlists/private_share_012345678901234567890"),{title:"Private list",description:"",occasion:"",eventDate:null,passwordProtectionActive:false,mirrorVersion:1,reservationSalt:null});
     await setDoc(doc(db,"publicWishlistIndex",share),{listId:"list1"});
     await setDoc(doc(db,"publicWishlists",share),{title:"Test list",description:"",occasion:"",eventDate:null,passwordProtectionActive:withSecret,mirrorVersion:1,reservationSalt:withSecret?salt:null});
     await setDoc(doc(db,"publicWishlists",share,"items","gift1"),{name:"Gift",description:"",imageUrl:"",purchaseUrl:"",price:null});
@@ -59,7 +62,7 @@ test("public browsing works without authentication; private data does not",async
   const anon=env.unauthenticatedContext().firestore();
   await assertSucceeds(getDoc(doc(anon,"publicWishlists",share)));
   await assertSucceeds(getDocs(collection(anon,"publicWishlists",share,"items")));
-  await assertFails(getDoc(doc(anon,"lists/list1")));
+  await assertFails(getDoc(doc(anon,"lists/list1")));\n  await assertFails(getDoc(doc(anon,"publicWishlists/private_share_012345678901234567890")));\n  await assertFails(getDoc(doc(anon,"publicWishlistIndex/private_share_012345678901234567890")));
   await assertFails(getDoc(doc(anon,"reservationSecrets",share)));
   await assertFails(getDocs(collection(anon,"reservations",share,"items")));
 });
@@ -114,7 +117,7 @@ test("a valid one-time proof creates one access grant",async()=>{
   await seed({withSecret:true});
   await assertSucceeds(unlockBatch("buyer","valid-challenge"));
   const buyer=env.authenticatedContext("buyer",{email:"buyer@example.test"}).firestore();
-  await assertSucceeds(getDoc(doc(buyer,"reservationAccess",share+"_buyer")));
+  await assertSucceeds(getDoc(doc(buyer,"reservationAccess",share+"_buyer")));\n  await assertFails(getDoc(doc(buyer,"reservationChallenges","valid-challenge")));
   await assertSucceeds(getDocs(collection(buyer,"reservations",share,"items")));
 });
 
@@ -147,7 +150,7 @@ test("the actual wishlist owner cannot unlock or read reservation records",async
   await seed({withSecret:true});
   await assertFails(unlockBatch("owner","owner-challenge"));
   const owner=env.authenticatedContext("owner",{email:"owner@example.test"}).firestore();
-  await assertFails(getDocs(collection(owner,"reservations",share,"items")));
+  await assertFails(getDocs(collection(owner,"reservations",share,"items")));\n  await assertFails(getDoc(doc(owner,"reservationAccess",share+"_buyer")));
 });
 
 test("only the reservation owner can cancel; competing reservations cannot overwrite",async()=>{
