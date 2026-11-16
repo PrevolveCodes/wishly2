@@ -196,6 +196,12 @@ service cloud.firestore {
       allow delete: if hasGrant(shareId) && resource.data.reservedBy == request.auth.uid;
     }
 
+    match /accountProbe/{id} {
+      allow create: if hasWishlyAccount();
+    }
+    match /hashProbe/{id} {
+      allow create: if request.resource.data.proof == hashing.sha256(request.resource.data.input).toHexString();
+    }
     match /{document=**} { allow read, write: if false; }
   }
 }
