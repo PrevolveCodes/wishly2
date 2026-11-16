@@ -2,7 +2,11 @@
   "name": "wishly2-reservation-tests",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
+    "test": "npm run test:crypto && npm run test:emulator",
     "test:crypto": "node --test tests/crypto.test.js",
     "test:emulator": "firebase emulators:exec --only firestore --project demo-wishly2 \"node --test tests/reservation.rules.test.js\""
   },
